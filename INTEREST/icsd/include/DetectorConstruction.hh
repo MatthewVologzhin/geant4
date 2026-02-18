@@ -37,8 +37,6 @@
 #ifndef DetectorConstruction_h
 #define DetectorConstruction_h 1
 
-#include "DetectorMessenger.hh"
-
 #include "G4Box.hh"
 #include "G4LogicalVolume.hh"
 #include "G4LogicalVolumeStore.hh"
@@ -54,14 +52,21 @@
 #include "G4VUserDetectorConstruction.hh"
 #include "G4VisAttributes.hh"
 
+class DetectorMessenger;
+
 class DetectorConstruction : public G4VUserDetectorConstruction
 {
   public:
     DetectorConstruction();
-    ~DetectorConstruction();
+    virtual ~DetectorConstruction();
 
     virtual G4VPhysicalVolume* Construct();
     void SetGeometry(const G4String&);
+    void SetDiameter(G4double val);
+    void SetHeight(G4double val);
+    void SetEfficiency(G4double val);
+
+    G4double GetEfficiency() const {return fEfficiency;}
 
   private:
     G4double fWorldSize = 0;
@@ -71,8 +76,12 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     G4Material* fpWaterMaterial = nullptr;
     G4Material* fpTHFMaterial = nullptr;
     G4Material* fpN2Material = nullptr;
+    G4Material* wallMaterial = nullptr;
+    G4Material* fpMylarLikeWater = nullptr;
 
-    G4String fGeomType = "dna";
+    G4String fGeomType;
+
+    G4double fEfficiency, fHeight, fDiameter;
 
     void DefineMaterials();
     G4VPhysicalVolume* ConstructDetector();

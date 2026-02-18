@@ -40,8 +40,12 @@
 #include "globals.hh"
 
 class DetectorConstruction;
+class G4UIdirectory;
 class G4UIcommand;
 class G4UIcmdWithAString;
+class G4UIcmdWithADouble;
+class G4UIcmdWithADoubleAndUnit;
+
 
 class DetectorMessenger : public G4UImessenger
 {
@@ -53,7 +57,10 @@ class DetectorMessenger : public G4UImessenger
 
   private:
     DetectorConstruction* fDetector = nullptr;
-
+    G4UIdirectory* fpDetDir = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpDiameterCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpHeightCmd = nullptr;
+    G4UIcmdWithADouble* fpEfficiencyCmd = nullptr;
     G4UIcmdWithAString* fGeomCmd = nullptr;
 };
 

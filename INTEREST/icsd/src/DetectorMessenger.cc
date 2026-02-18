@@ -38,6 +38,8 @@
 #include "DetectorConstruction.hh"
 
 #include "G4UIcmdWithAString.hh"
+#include "G4UIcmdWithADouble.hh"
+#include "G4UIcmdWithADoubleAndUnit.hh"
 #include "G4UIcommand.hh"
 #include "G4UIdirectory.hh"
 #include "G4UIparameter.hh"
@@ -46,8 +48,29 @@
 
 DetectorMessenger::DetectorMessenger(DetectorConstruction* Det) : G4UImessenger(), fDetector(Det)
 {
+  fpDetDir = new G4UIdirectory("/det/");
+  fpDetDir->SetGuidance("Control detector parameters");
+
+  fpDiameterCmd = new G4UIcmdWithADoubleAndUnit("/det/setDiameter", this);
+  fpDiameterCmd->SetGuidance("Set detector diameter");
+  fpDiameterCmd->SetParameterName("Diameter", false);
+  fpDiameterCmd->SetRange("Diameter>.0");
+  fpDiameterCmd->SetUnitCategory("Length");
+
+  fpHeightCmd = new G4UIcmdWithADoubleAndUnit("/det/setHeight", this);
+  fpHeightCmd->SetGuidance("Set detector height");
+  fpHeightCmd->SetParameterName("Height", false);
+  fpHeightCmd->SetRange("Height>0.");
+  fpHeightCmd->SetUnitCategory("Length");
+
+  fpEfficiencyCmd = new G4UIcmdWithADouble("/det/setEfficiency", this);
+  fpEfficiencyCmd->SetGuidance("Set detector efficiency");
+  fpEfficiencyCmd->SetParameterName("Efficiency", false);
+  fpEfficiencyCmd->SetRange("Efficiency>=0. && Efficiency<=1.");
+
   fGeomCmd = new G4UIcmdWithAString("/icsd/setGeom", this);
-  fGeomCmd->SetGuidance("Select the geometry: dna or nanodosimeter.");
+  //fGeomCmd->SetGuidance("Select the geometry: dna or nanodosimeter.");
+  fGeomCmd->SetGuidance("Select the geometry: JetCounter/StarTrack/dna/nanodosimeter");
   fGeomCmd->SetParameterName("choice", false);
   fGeomCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
   fGeomCmd->SetToBeBroadcasted(false);
@@ -58,6 +81,9 @@ DetectorMessenger::DetectorMessenger(DetectorConstruction* Det) : G4UImessenger(
 void DetectorMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
 {
   if (command == fGeomCmd) fDetector->SetGeometry(newValue);
+  if (command == fpDiameterCmd) fDetector->SetDiameter(fpDiameterCmd->GetNewDoubleValue(newValue));
+  if (command == fpHeightCmd) fDetector->SetHeight(fpHeightCmd->GetNewDoubleValue(newValue));
+  if (command == fpEfficiencyCmd) fDetector->SetEfficiency(fpEfficiencyCmd->GetNewDoubleValue(newValue));
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

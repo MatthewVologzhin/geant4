@@ -37,7 +37,6 @@
 #include "DetectorConstruction.hh"
 
 #include "DetectorMessenger.hh"
-
 #include "G4ProductionCuts.hh"
 #include "G4RunManager.hh"
 #include "G4SystemOfUnits.hh"
@@ -46,151 +45,119 @@
 
 DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
 {
-  // create commands for interactive definition of the detector
+  fWorldSize = 1. * um; 
+  fDiameter = 2.3 * nm; 
+  fHeight = 3.4 * nm;
+  fEfficiency = 1.;
+  fGeomType = "JetCounter";
   fDetectorMessenger = new DetectorMessenger(this);
 }
 
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
+void DetectorConstruction::DefineMaterials()
+{
+  G4NistManager* man = G4NistManager::Instance();
+  G4Material* H2O = man->FindOrBuildMaterial("G4_WATER");
+  fpWaterMaterial = H2O;
+
+  // Имитация Майлара через плотную воду (1.4 г/см3)
+  // Это нужно для правильной работы физики Geant4-DNA внутри стенки
+  G4double mylarDensity = 1.4 * g / cm3;
+  fpMylarLikeWater = new G4Material("MylarLikeWater", mylarDensity, 1);
+  fpMylarLikeWater->AddMaterial(H2O, 1.0);
+}
 
 DetectorConstruction::~DetectorConstruction()
 {
   delete fDetectorMessenger;
 }
 
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
-
 G4VPhysicalVolume* DetectorConstruction::Construct()
-
 {
   DefineMaterials();
   return ConstructDetector();
 }
 
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
-
-void DetectorConstruction::DefineMaterials()
+void DetectorConstruction::SetDiameter(G4double val)
 {
-  // Water is defined from NIST material database
-  G4NistManager* man = G4NistManager::Instance();
-  G4Material* H2O = man->FindOrBuildMaterial("G4_WATER");
-
-  // Default materials in setup.
-  fpWaterMaterial = H2O;
-
-  // needed variables
-
-  G4double z, a, density;
-  G4String name, symbol;
-  G4int nComponents, nAtoms;
-
-  a = 12.0107 * g / mole;
-  G4Element* elC = new G4Element(name = "Carbon", symbol = "C", z = 6., a);
-
-  a = 1.00794 * g / mole;
-  G4Element* elH = new G4Element(name = "Hydrogen", symbol = "H", z = 1., a);
-
-  a = 15.9994 * g / mole;
-  G4Element* elO = new G4Element(name = "Oxygen", symbol = "O", z = 8., a);
-
-  a = 14.0067 * g / mole;
-  G4Element* elN = new G4Element(name = "Nitrogen", symbol = "N", z = 7., a);
-
-  // Definition of Tetrahydrofurane (THF)
-
-  density = 1.346 * g / cm3;
-
-  fpTHFMaterial = new G4Material("THF", density, nComponents = 3);
-  fpTHFMaterial->AddElement(elC, nAtoms = 4);
-  fpTHFMaterial->AddElement(elH, nAtoms = 8);
-  fpTHFMaterial->AddElement(elO, nAtoms = 1);
-
-  // Definition of Nitrogen in nanodosimetry experiments
-
-  density = 0.34e-6 * g / cm3;
-
-  fpN2Material = new G4Material("N2", density, nComponents = 1);
-  fpN2Material->AddElement(elN, nAtoms = 2);
+  fDiameter = val;
+  G4RunManager::GetRunManager()->GeometryHasBeenModified();
 }
 
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
+void DetectorConstruction::SetHeight(G4double val)
+{
+  fHeight = val;
+  G4RunManager::GetRunManager()->GeometryHasBeenModified();
+}
+
+void DetectorConstruction::SetEfficiency(G4double val)
+{
+  fEfficiency = val;
+}
 
 G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
 {
-  G4double diameter;
-  G4double highz;
-  G4Material* targetMaterial;
-  G4Material* worldMaterial;
+  G4Material* worldMaterial = fpWaterMaterial;
+  G4Material* targetMaterial = fpWaterMaterial;
+  G4Material* wallMaterial = fpMylarLikeWater;
 
-  if (fGeomType == "dna") {
-    /*// nanometric geometry
-    fWorldSize = 20. * nm;
-    diameter = 20 * nm; 
-    highz = 20 * nm;*/
-    // Hilgers (Alpha, Carbon)
-    fWorldSize = 20. * nm;
-    diameter = 2.3 * nm; 
-    highz = 3.4 * nm;
-    targetMaterial = fpWaterMaterial;
-    worldMaterial = fpWaterMaterial;
+  // 1. Создаем Мир
+  fpSolidWorld = new G4Box("World", fWorldSize / 2, fWorldSize / 2, fWorldSize / 2);
+  fpLogicWorld = new G4LogicalVolume(fpSolidWorld, worldMaterial, "World");
+  fpPhysiWorld = new G4PVPlacement(0, G4ThreeVector(), "World", fpLogicWorld, 0, false, 0);
+
+  // 2. Логика построения в зависимости от типа эксперимента
+  if (fGeomType == "JetCounter" || fGeomType == "dna") {
+    // Толщина стенки Майлара (в эквиваленте ~150 нм достаточно для электронного равновесия)
+    G4double wallThick = 150. * nm;
+
+    // Сначала создаем Стенку (Wall)
+    G4Tubs* solidWall = new G4Tubs("Wall", 0, (fDiameter/2. + wallThick), 
+                                   (fHeight/2. + wallThick), 0, 360*degree);
+    G4LogicalVolume* logicWall = new G4LogicalVolume(solidWall, wallMaterial, "Wall");
+    
+    // Помещаем Стенку в Мир
+    G4VPhysicalVolume* physiWall = new G4PVPlacement(0, G4ThreeVector(), "Wall", 
+                                                     logicWall, fpPhysiWorld, false, 0);
+
+    // Помещаем Мишень (Target) ВНУТРЬ Стенки
+    G4Tubs* solidTarget = new G4Tubs("Target", 0, fDiameter/2., fHeight/2., 0, 360*degree);
+    G4LogicalVolume* logicTarget = new G4LogicalVolume(solidTarget, targetMaterial, "Target");
+    
+    new G4PVPlacement(0, G4ThreeVector(), "Target", logicTarget, physiWall, false, 0);
+    
+    // Визуализация
+    logicWall->SetVisAttributes(new G4VisAttributes(G4Colour(0, 1, 0, 0.2))); // Зеленая прозрачная стенка
+    logicTarget->SetVisAttributes(new G4VisAttributes(G4Colour(1, 0, 0)));    // Красная мишень
+
+  } else {
+    // Для StarTrack или макро-геометрии (БЕЗ стенки)
+    G4Tubs* solidTarget = new G4Tubs("Target", 0, fDiameter/2., fHeight/2., 0, 360*degree);
+    G4LogicalVolume* logicTarget = new G4LogicalVolume(solidTarget, targetMaterial, "Target");
+    
+    new G4PVPlacement(0, G4ThreeVector(), "Target", logicTarget, fpPhysiWorld, false, 0);
+    
+    logicTarget->SetVisAttributes(new G4VisAttributes(G4Colour(1, 0, 0)));
   }
-  else {
-    // macrometric geometry (experimental target in nanodosimetry)
-    fWorldSize = 2 * cm;
-    diameter = 1 * cm;
-    highz = 1 * cm;
-    ;
-    targetMaterial = fpWaterMaterial;
-    worldMaterial = fpWaterMaterial;
-  }
-
-  fpSolidWorld = new G4Box("World",  // its name
-                           fWorldSize / 2, fWorldSize / 2, fWorldSize / 2);  // its size
-
-  fpLogicWorld = new G4LogicalVolume(fpSolidWorld,  // its solid
-                                     worldMaterial,  // its material
-                                     "World");  // its name
-
-  fpPhysiWorld = new G4PVPlacement(0,  // no rotation
-                                   G4ThreeVector(),  // at (0,0,0)
-                                   "World",  // its name
-                                   fpLogicWorld,  // its logical volume
-                                   0,  // its mother  volume
-                                   false,  // no boolean operation
-                                   0);  // copy number
-
-  G4Tubs* solidTarget =
-    new G4Tubs("Target", 0, diameter / 2., highz / 2., 0 * degree, 360 * degree);
-
-  G4LogicalVolume* logicTarget = new G4LogicalVolume(solidTarget,  // its solid
-                                                     targetMaterial,  // its material
-                                                     "Target");  // its name
-
-  new G4PVPlacement(0,  // no rotation
-                    G4ThreeVector(),  // at (0,0,0)
-                    "Target",  // its name
-                    logicTarget,  // its logical volume
-                    fpPhysiWorld,  // its mother  volume
-                    false,  // no boolean operation
-                    0);  // copy number
-
-  // Visualization attributes
-  G4VisAttributes* worldVisAtt = new G4VisAttributes(G4Colour(1.0, 1.0, 1.0));
-  worldVisAtt->SetVisibility(true);
-  fpLogicWorld->SetVisAttributes(worldVisAtt);
-
-  G4VisAttributes* worldVisAtt1 = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
-  worldVisAtt1->SetVisibility(true);
-  logicTarget->SetVisAttributes(worldVisAtt1);
 
   return fpPhysiWorld;
 }
-
-//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
 
 void DetectorConstruction::SetGeometry(const G4String& name)
 {
   fGeomType = name;
 
-  // tell RunManager about changes
+  if (fGeomType == "JetCounter") {
+    fDiameter = 2.6 * nm;
+    fHeight = 3.4 * nm;
+    fEfficiency = 1;
+    G4cout << "-> Set to JetCounter: Wall added, D=2.3, H=3.4, Eff=0.57" << G4endl;
+  } 
+  else if (fGeomType == "StarTrack") {
+    fDiameter = 20.0 * nm;
+    fHeight = 20.0 * nm;
+    fEfficiency = 0.20;
+    G4cout << "-> Set to StarTrack: NO Wall, D=20, H=20, Eff=0.20" << G4endl;
+  }
+
   G4RunManager::GetRunManager()->GeometryHasBeenModified();
 }

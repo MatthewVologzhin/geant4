@@ -65,12 +65,13 @@ SteppingAction::~SteppingAction() {}
 void SteppingAction::UserSteppingAction(const G4Step* step)
 {
   // #ifdef G4MULTITHREADED
-  //     G4MTRunManager *rm = G4MTRunManager::GetRunManager();
+  //     G4MTRunManager *pRunManager = G4MTRunManager::GetRunManager();
   // #else
-  G4RunManager* rm = G4RunManager::GetRunManager();
+  G4RunManager* pRunManager = G4RunManager::GetRunManager();
+  const DetectorConstruction* pDetector = static_cast<const DetectorConstruction*>(pRunManager->GetUserDetectorConstruction());
   // #endif
 
-  G4int eventID = rm->GetCurrentEvent()->GetEventID();
+  G4int eventID = pRunManager->GetCurrentEvent()->GetEventID();
 
   G4double flagProcess(0.);
   G4double x, y, z;
@@ -78,8 +79,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   G4String process_name;
   process_name = step->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName();
   G4int subtype = step->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessSubType();
-  
-  G4double detectorEfficiency = 0.57;
+
+  G4double detectorEfficiency = pDetector->GetEfficiency();
 
   // only ionizations in the target will be recorded  
   if (step->GetPreStepPoint()->GetPhysicalVolume()->GetName() == "Target") {
