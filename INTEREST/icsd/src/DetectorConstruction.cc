@@ -46,7 +46,7 @@
 DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
 {
   fWorldSize = 1. * um; 
-  fDiameter = 2.3 * nm; 
+  fDiameter = 2.3 * nm;ВВ
   fHeight = 3.4 * nm;
   fEfficiency = 1.;
   fGeomType = "JetCounter";
