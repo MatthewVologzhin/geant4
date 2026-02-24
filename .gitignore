@@ -23,7 +23,6 @@ INTEREST/*
 **/bin/
 **/*.root
 **/*.csv
-**/*.txt
 **/*.pdf
 **/.vscode/
 **/.DS_Store
