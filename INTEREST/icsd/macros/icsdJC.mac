@@ -6,6 +6,8 @@
 /physics/setPhysics G4EmDNAPhysics_option2
 /run/initialize
 
+#/process/dna/UseDNAMultipleIonisation true
+
 /gun/particle ion
 /gun/ion 2 4 2
 /gun/energy 4 MeV

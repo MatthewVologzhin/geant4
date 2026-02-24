@@ -53,9 +53,13 @@ class EventAction : public G4UserEventAction
 
     G4int GetEventIn() const { return fEventIn; }
     void AddEventIn(G4int value) { fEventIn += value; }
+    void AddElectronEventIn(G4int value) { fElectronEventIn += value; }
+    void AddIonEventIn(G4int value) { fIonEventIn += value; }
 
   private:
     G4int fEventIn;
+    G4int fElectronEventIn;
+    G4int fIonEventIn;
 };
 
 #endif

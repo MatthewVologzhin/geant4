@@ -48,6 +48,7 @@
 #include "G4VPhysicalVolume.hh"
 #include "G4VTouchable.hh"
 #include "Randomize.hh"
+#include "G4Electron.hh"
 
 // #ifdef G4MULTITHREADED
 //   #include "G4MTRunManager.hh"
@@ -89,7 +90,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
     else if (process_name == "e-_G4DNAExcitation")
       flagProcess = 2;
     else if (subtype == 2 || subtype == 53) 
-		flagProcess = 3;  
+		  flagProcess = 3;  
 
     // Energy deposited and position of the interaction are saved
     dE = step->GetTotalEnergyDeposit() / eV;
@@ -112,7 +113,18 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       analysisManager->AddNtupleRow(2);
 
       // histogram
-      if (flagProcess == 3 && (G4UniformRand() < detectorEfficiency)) fpEventaction->AddEventIn(1);
+      if (flagProcess == 3 && (G4UniformRand() < detectorEfficiency)) {
+        G4int nbIonisations = step->GetSecondaryInCurrentStep()->size();
+        G4ParticleDefinition* def = step->GetTrack()->GetDefinition();
+        
+        fpEventaction->AddEventIn(nbIonisations);
+        
+        
+        if (def != G4Electron::Definition()) fpEventaction->AddIonEventIn(nbIonisations);
+        else fpEventaction->AddElectronEventIn(nbIonisations);
+        analysisManager->FillNtupleDColumn(3, 0, nbIonisations);
+        analysisManager->AddNtupleRow(3);
+      }
     }
   }
 }

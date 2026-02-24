@@ -54,7 +54,7 @@
 #endif
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
-EventAction::EventAction() : G4UserEventAction(), fEventIn(0) {}
+EventAction::EventAction() : G4UserEventAction(), fEventIn(0), fIonEventIn(0), fElectronEventIn(0) {}
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 EventAction::~EventAction() {}
@@ -63,6 +63,8 @@ EventAction::~EventAction() {}
 void EventAction::BeginOfEventAction(const G4Event*)
 {
   fEventIn = 0;
+  fIonEventIn = 0;
+  fElectronEventIn = 0;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -71,5 +73,7 @@ void EventAction::EndOfEventAction(const G4Event*)
   G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
 
   analysisManager->FillNtupleDColumn(1, 0, fEventIn);
+  analysisManager->FillNtupleDColumn(1, 1, fIonEventIn);
+  analysisManager->FillNtupleDColumn(1, 2, fElectronEventIn);
   analysisManager->AddNtupleRow(1);
 }

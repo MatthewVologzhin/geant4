@@ -7,6 +7,7 @@
 #include "G4ParticleGun.hh"
 #include "G4UnitsTable.hh"
 #include "G4AutoLock.hh"
+#include "G4EmParameters.hh"
 #include <filesystem>
 #include <algorithm> // Для std::replace
 
@@ -27,6 +28,9 @@ RunAction::RunAction() : G4UserRunAction()
   analysisManager->SetFirstNtupleId(1);
   analysisManager->CreateNtuple("ntuple_1", "ICSD");
   analysisManager->CreateNtupleDColumn(1, "ionisations");
+  analysisManager->CreateNtupleDColumn(1, "ionIonisations");
+  analysisManager->CreateNtupleDColumn(1, "electronIonisations");
+  analysisManager->CreateNtupleDColumn(1, "multipleIonisations");
   analysisManager->FinishNtuple(1);
 
   // --- Ntuple 2 ---
@@ -38,6 +42,11 @@ RunAction::RunAction() : G4UserRunAction()
   analysisManager->CreateNtupleDColumn(2, "z");
   analysisManager->CreateNtupleDColumn(2, "totalEnergyDeposit");
   analysisManager->FinishNtuple(2);
+
+  // --- Ntuple 3 ---
+  analysisManager->CreateNtuple("ntuple_3", "multipleionisations");
+  analysisManager->CreateNtupleDColumn(3, "multipleIonisations");
+  analysisManager->FinishNtuple(3);
 }
 
 RunAction::~RunAction() {}
@@ -113,8 +122,10 @@ void RunAction::BeginOfRunAction(const G4Run* run)
 
 void RunAction::EndOfRunAction(const G4Run*)
 {
+  G4EmParameters* pDNAParams = G4EmParameters::Instance();
+  G4bool isMultipleIonisation = pDNAParams->DNAMultipleIonisation();
   auto analysisManager = G4AnalysisManager::Instance();
-
+  
   // Сохраняем и закрываем файл (вызывают ВСЕ потоки)
   analysisManager->Write();
   analysisManager->CloseFile();
@@ -129,7 +140,10 @@ void RunAction::EndOfRunAction(const G4Run*)
       if (fFinalFileName != "") 
       {
           G4String tempName = folder_name + "/" + "temp_running_file.root";
-          G4String finalName = fFinalFileName + ".root";
+          //G4String finalName = fFinalFileName + ".root";
+          G4String finalName = fFinalFileName;
+          if (isMultipleIonisation) finalName += "_MultiIoni.root";
+          else finalName += ".root";
 
           G4cout << ">>> Renaming " << tempName << " to " << finalName << G4endl;
 

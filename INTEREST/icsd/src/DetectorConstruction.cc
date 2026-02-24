@@ -46,9 +46,9 @@
 DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
 {
   fWorldSize = 1. * um; 
-  fDiameter = 2.3 * nm;ВВ
-  fHeight = 3.4 * nm;
-  fEfficiency = 1.;
+  fDiameter = 2.3 * nm;
+  fHeight = 6.1 * nm;
+  fEfficiency = 0.2;
   fGeomType = "JetCounter";
   fDetectorMessenger = new DetectorMessenger(this);
 }
@@ -147,8 +147,8 @@ void DetectorConstruction::SetGeometry(const G4String& name)
   fGeomType = name;
 
   if (fGeomType == "JetCounter") {
-    fDiameter = 2.6 * nm;
-    fHeight = 3.4 * nm;
+    fDiameter = 2.3 * nm;
+    fHeight = 6.1 * nm;
     fEfficiency = 1;
     G4cout << "-> Set to JetCounter: Wall added, D=2.3, H=3.4, Eff=0.57" << G4endl;
   } 

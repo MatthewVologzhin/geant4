@@ -6,6 +6,11 @@
 /physics/setPhysics G4EmDNAPhysics_option2
 /run/initialize
 
+#/process/dna/UseDNAMultipleIonisation true
+# 1. В каком диапазоне энергий работает?
+# 2. Для GenericIon включена
+# 
+
 /gun/particle ion
 /gun/ion 1 1 1
 /gun/energy 20 MeV
