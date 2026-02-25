@@ -64,22 +64,31 @@ void plotC12()
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	//parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "DNA2MI", "DNA8MI"};
+	parameters.names = {"DNA2", "DNA8", "DNA2MI", "DNA8MI"};
 	parameters.paths["DNA2"]  = "root/ICSD_C12_88-MeV_DNA2.root";
 	parameters.paths["DNA4"]  = "root/ICSD_C12_88-MeV_DNA4.root";
 	parameters.paths["DNA6"]  = "root/ICSD_C12_88-MeV_DNA6.root";
 	parameters.paths["DNA8"]  = "root/ICSD_C12_88-MeV_DNA8.root";
+	parameters.paths["DNA2MI"]  = "root/ICSD_C12_88-MeV_DNA2_MultiIoni.root";
+	parameters.paths["DNA8MI"]  = "root/ICSD_C12_88-MeV_DNA8_MultiIoni.root";
 
 	parameters.colors["DNA2"] = kRed;      
 	parameters.colors["DNA4"] = kBlue;     
 	parameters.colors["DNA6"] = kGreen+2;  
 	parameters.colors["DNA8"] = kMagenta+2;
+	
+	parameters.colors["DNA2MI"] = kRed+2;
+	parameters.colors["DNA8MI"] = kMagenta+4;
 
 	parameters.legends["DNA2"] = Form("#bf{DNA Opt2}");
 	parameters.legends["DNA4"] = Form("#bf{DNA Opt4}");
 	parameters.legends["DNA6"] = Form("#bf{DNA Opt6}");
 	parameters.legends["DNA8"] = Form("#bf{DNA Opt8}");
 	parameters.legends["Exp"]  = Form("#bf{%s}", dataAuthors.Data());
+	
+	parameters.legends["DNA2MI"] = Form("#bf{DNA Opt2 MI}");
+	parameters.legends["DNA8MI"] = Form("#bf{DNA Opt8 MI}");
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;

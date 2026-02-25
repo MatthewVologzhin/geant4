@@ -3,17 +3,18 @@
 /run/printProgress 100
 #/icsd/setGeom nanodosimeter
 /icsd/setGeom JetCounter
-/physics/setPhysics G4EmDNAPhysics_option2
+/physics/setPhysics G4EmDNAPhysics_option8
+/process/dna/UseDNAMultipleIonisation true
+
 /run/initialize
 
-#/process/dna/UseDNAMultipleIonisation true
 
 /gun/particle ion
 /gun/ion 2 4 2
 /gun/energy 4 MeV
-/run/beamOn 100000
+/run/beamOn 1000
 
 /gun/particle ion
 /gun/ion 6 12 6
 /gun/energy 88 MeV
-/run/beamOn 100000
+/run/beamOn 1000

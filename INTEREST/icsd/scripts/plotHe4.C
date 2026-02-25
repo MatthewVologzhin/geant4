@@ -56,7 +56,8 @@ void plotHe4()
 	
 	/* Parameters */
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "DNA2MI", "DNA8MI"};
+	//parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "DNA2MI", "DNA8MI"};
+	parameters.names = {"DNA2", "DNA8", "DNA2MI", "DNA8MI"};
 	parameters.paths["DNA2"]  = "root/ICSD_alpha_4-MeV_DNA2.root";
 	parameters.paths["DNA2MI"]  = "root/ICSD_alpha_4-MeV_DNA2_MultiIoni.root";
 	parameters.paths["DNA4"]  = "root/ICSD_alpha_4-MeV_DNA4.root";

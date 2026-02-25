@@ -3,7 +3,8 @@
 /run/printProgress 100
 #/icsd/setGeom nanodosimeter
 /icsd/setGeom StarTrack
-/physics/setPhysics G4EmDNAPhysics_option2
+/process/dna/UseDNAMultipleIonisation true
+/physics/setPhysics G4EmDNAPhysics_option8
 /run/initialize
 
 #/process/dna/UseDNAMultipleIonisation true
@@ -29,4 +30,4 @@
 /gun/particle ion
 /gun/ion 3 7 3
 /gun/energy 26.7 MeV
-/run/beamOn 1000
+/run/beamOn 10000
