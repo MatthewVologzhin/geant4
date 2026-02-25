@@ -54,13 +54,9 @@ RunAction::~RunAction() {}
 void RunAction::BeginOfRunAction(const G4Run* run)
 {
   auto analysisManager = G4AnalysisManager::Instance();
-  // ---------------------------------------------------------
-  // ОПРЕДЕЛЕНИЕ ИМЕНИ ФИЗИКИ (Делаем один раз или локально)
-  // ---------------------------------------------------------
   G4String physName = "Unknown";
   const G4VUserPhysicsList* constPhysList = pRunManager->GetUserPhysicsList();
   
-  // Приведение типов лучше делать через dynamic_cast с проверкой
   if (constPhysList) {
       const PhysicsList* physList = dynamic_cast<const PhysicsList*>(constPhysList);
       if (physList) {
@@ -75,9 +71,6 @@ void RunAction::BeginOfRunAction(const G4Run* run)
       }
   }
 
-  // ---------------------------------------------------------
-  // ЛОГИКА ОПРЕДЕЛЕНИЯ ИМЕНИ ФАЙЛА (Только Worker, как у тебя)
-  // ---------------------------------------------------------
   if (!G4Threading::IsMasterThread()) 
   {
       const auto* pBaseGen = pRunManager->GetUserPrimaryGeneratorAction();
@@ -87,7 +80,6 @@ void RunAction::BeginOfRunAction(const G4Run* run)
           const G4ParticleGun* pGun = pMyGen->GetParticleGun();
           if (pGun) {
               G4AutoLock lock(&fMutex);
-              // Если имя еще не задано, формируем его
               if (fFinalFileName == "") {
                   G4String partName = pGun->GetParticleDefinition()->GetParticleName();
                   G4double energy = pGun->GetParticleEnergy();
@@ -100,11 +92,6 @@ void RunAction::BeginOfRunAction(const G4Run* run)
       }
   }
 
-  // ---------------------------------------------------------
-  // ЛОГИКА ОТКРЫТИЯ ФАЙЛА (ИСПРАВЛЕНО!)
-  // ---------------------------------------------------------
-  
-  // 1. Master подготавливает директорию и сбрасывает имя
   if (G4Threading::IsMasterThread()) 
   {
       G4AutoLock lock(&fMutex);
@@ -114,9 +101,6 @@ void RunAction::BeginOfRunAction(const G4Run* run)
             std::filesystem::create_directory(folder_name);
       }
   }
-
-  // 2. ВАЖНО: OpenFile вызывают ВСЕ потоки (и Master, и Workers)!
-  // AnalysisManager сам разберется, что Master открывает файл, а Workers подсоединяются.
   analysisManager->OpenFile(folder_name + "/" + "temp_running_file");
 }
 
@@ -126,13 +110,9 @@ void RunAction::EndOfRunAction(const G4Run*)
   G4bool isMultipleIonisation = pDNAParams->DNAMultipleIonisation();
   auto analysisManager = G4AnalysisManager::Instance();
   
-  // Сохраняем и закрываем файл (вызывают ВСЕ потоки)
   analysisManager->Write();
   analysisManager->CloseFile();
 
-  // ---------------------------------------------------------
-  // ЛОГИКА ПЕРЕИМЕНОВАНИЯ (Только Master)
-  // ---------------------------------------------------------
   if (G4Threading::IsMasterThread()) 
   {
       G4AutoLock lock(&fMutex);

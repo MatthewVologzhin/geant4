@@ -40,6 +40,7 @@
 #include "PrimaryGeneratorAction.hh"
 #include "RunAction.hh"
 #include "SteppingAction.hh"
+#include "StackingAction.hh"
 
 #include "G4RunManager.hh"
 
@@ -77,8 +78,9 @@ void ActionInitialization::Build() const
 
   EventAction* event = new EventAction();
   SetUserAction(event);
-
+  
   SetUserAction(new SteppingAction(event));
+  SetUserAction(new StackingAction());
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

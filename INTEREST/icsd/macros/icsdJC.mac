@@ -4,8 +4,7 @@
 #/icsd/setGeom nanodosimeter
 /icsd/setGeom JetCounter
 /physics/setPhysics G4EmDNAPhysics_option8
-/process/dna/UseDNAMultipleIonisation true
-
+#/process/dna/UseDNAMultipleIonisation true
 /run/initialize
 
 
