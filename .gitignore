@@ -17,6 +17,8 @@ INTEREST/*
 
 # 6. Разрешаем конкретные проекты внутри INTEREST
 !INTEREST/icsd/
+!INTEREST/range/
+!INTEREST/spower/
 
 # 7. Глобальный фильтр мусора (Geant4, VS Code, системы)
 **/build/
