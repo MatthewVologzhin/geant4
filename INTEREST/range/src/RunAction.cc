@@ -82,10 +82,10 @@ void RunAction::BeginOfRunAction(const G4Run*)
   // if (isMaster) G4Random::showEngineStatus();
 
   // Histograms
-  G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
-  if (analysisManager->IsActive()) {
-    analysisManager->OpenFile();
-  }
+  //G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
+  //if (analysisManager->IsActive()) {
+  //  analysisManager->OpenFile();
+  //}
 
   // Creation of "ROOT" folder
   if (G4Threading::IsMasterThread()) 
@@ -115,11 +115,11 @@ void RunAction::EndOfRunAction(const G4Run*)
   if (isMaster) fpRun->EndOfRun();
 
   // Save histograms
-  G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
-  if (analysisManager->IsActive()) {
-    analysisManager->Write();
-    analysisManager->CloseFile();
-  }
+  //G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
+ // if (analysisManager->IsActive()) {
+ //   analysisManager->Write();
+ //   analysisManager->CloseFile();
+  //}
 
   // Show Rndm status
   // if (isMaster) G4Random::showEngineStatus();

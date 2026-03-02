@@ -58,7 +58,7 @@ void HistoManager::Book()
   G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
   analysisManager->SetDefaultFileType("root");
   analysisManager->SetFileName(fFileName);
-  analysisManager->SetVerboseLevel(1);
+  analysisManager->SetVerboseLevel(0);
   analysisManager->SetActivation(true);
 
   // Define histograms start values
@@ -81,4 +81,7 @@ void HistoManager::Book()
     G4int ih = analysisManager->CreateH1(id[k], title[k], nbins, vmin, vmax);
     analysisManager->SetH1Activation(ih, false);
   }
+
+  analysisManager->CreateH1("dummy1", "dummy", 100, 0, 1000); // Это будет ID 1
+  analysisManager->CreateH1("dummy3", "dummy", 100, 0, 1000); // Это будет ID 3
 }

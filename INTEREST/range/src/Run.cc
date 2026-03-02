@@ -249,8 +249,8 @@ void Run::EndOfRun()
 
   FILE* myFile;
   myFile = fopen(filename, "a");
-  fprintf(myFile, "%e %e %e %e %e %e %e\n", fEkin / eV, fTrackLen / nm, rmsTrack / nm,
-          fProjRange / nm, rmsProj / nm, fPenetration / nm, rmsPene / nm);
+  fprintf(myFile, "%e %e %e %e %e %e %e %d\n", fEkin / eV, fTrackLen / nm, rmsTrack / nm,
+          fProjRange / nm, rmsProj / nm, fPenetration / nm, rmsPene / nm, numberOfEvent);
   fclose(myFile);
 
   // Reset default formats
