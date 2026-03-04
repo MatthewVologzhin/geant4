@@ -40,7 +40,7 @@ target_link_libraries(range ${Geant4_LIBRARIES} )
 # relies on these scripts being in the current working directory.
 #
 set(range_SCRIPTS
-    range.in histo.in plot.C
+    range.in histo.in plot.C run_sim.py
   )
 
 foreach(_script ${range_SCRIPTS})

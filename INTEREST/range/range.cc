@@ -77,6 +77,7 @@ int main(int argc, char** argv)
 
   // Get the pointer to the User Interface manager
   G4UImanager* UI = G4UImanager::GetUIpointer();
+  UI->ApplyCommand("/analysis/verbose 0");
 
   if (argc > 1)  // Batch mode
   {
