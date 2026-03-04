@@ -21,11 +21,12 @@ struct Parameters{
 	std::vector<std::string> names;
 };
 
-void plotProton()
+void plotAlphaDetour()
 {
 	/* Auxilary variables */
-	double nm, um, mm, m, MeV;
+	double nm, um, mm, cm, m, MeV;
 	m =  1e9; 
+	cm = 1e-2*m;
 	mm = 1e-3*m;
 	um = 1e-6*m;
 	nm = 1e-9*m;
@@ -38,7 +39,7 @@ void plotProton()
 	gStyle->SetCanvasPreferGL(kTRUE);
 	gStyle->SetPadBorderSize(0);																										  
 	
-	/* Experimental data: electrons */	
+	/* Experimental data: alpha */	
 	const int n = 49;
     double xData[n] = {
         0.0010, 0.0015, 0.0020, 0.0030, 0.0040, 0.0050, 0.0060, 0.0080, 0.0100,
@@ -49,20 +50,21 @@ void plotProton()
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
     double yData[n] = {
-        1.337E+02, 1.638E+02, 1.891E+02, 2.316E+02, 2.675E+02, 2.990E+02, 3.276E+02, 3.782E+02, 4.229E+02,
-        5.036E+02, 5.673E+02, 6.628E+02, 7.290E+02, 7.740E+02, 8.026E+02, 8.241E+02, 8.145E+02, 7.360E+02,
-        6.585E+02, 5.435E+02, 4.643E+02, 4.065E+02, 3.624E+02, 2.997E+02, 2.574E+02, 1.934E+02, 1.569E+02,
-        1.160E+02, 9.319E+01, 7.842E+01, 6.801E+01, 5.417E+01, 4.532E+01, 3.269E+01, 2.589E+01, 1.864E+01,
-        1.479E+01, 1.238E+01, 1.072E+01, 8.578E+00, 7.250E+00, 5.417E+00, 4.470E+00, 3.504E+00, 3.018E+00,
-        2.731E+00, 2.544E+00, 2.323E+00, 2.203E+00
-    };
+		0.5212, 0.5364, 0.5501, 0.5737, 0.5934, 0.6102, 0.6250,
+		0.6497, 0.6700, 0.7080, 0.7352, 0.7724, 0.7973, 0.8155,
+		0.8296, 0.8503, 0.8649, 0.8886, 0.9032, 0.9212, 0.9323,
+		0.9402, 0.9462, 0.9551, 0.9615, 0.9722, 0.9789, 0.9867,
+		0.9907, 0.9931, 0.9946, 0.9963, 0.9973, 0.9983, 0.9988,
+		0.9992, 0.9993, 0.9991, 0.9994, 0.9995, 0.9995, 0.9996,
+		0.9996, 0.9996, 0.9996, 0.9997, 0.9997, 0.9997, 0.9997
+	};
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 
-	const std::string particleName = "proton";
+	const std::string particleName = "alpha";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -85,18 +87,19 @@ void plotProton()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 1.0;   
-	double yAxisMax = 1000.0;
+	double yAxisMin = 3e-1;   
+	double yAxisMax = 3;
 	double xAxisMin = 0.001;
-	double xAxisMax = 4641.5;
+	double xAxisMax = 1e5;
+	//double xAxisMax = 4641.5;
 	//double xAxisMax = 1000.0;
 	double nbBins = 1;
 
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.23;
-	double yAxisResMax = 0.35;
+	double yAxisResMin = -0.32;
+	double yAxisResMax = 0.07;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */
@@ -130,14 +133,18 @@ void plotProton()
 		pad1->cd();
 		/* Fetch the data from .txt files */
 		std::ifstream inputFile(parameters.paths[name]);
-		std::vector<double> vecEnergy, vecSP, vecRMSE;
+		std::vector<double> vecEnergy, vecDetour, vecSME;
 
 		double rho = 0.998;
-		double energyVar, spVar, rmseVar;
-		while (inputFile >> energyVar >> spVar >> rmseVar){
+		double energyVar, rangeVar, rmseRangeVar, penVar, rmsePenVar, emptyVar, nbVar;
+		while (inputFile >> energyVar >> rangeVar >> rmseRangeVar 
+						 >> emptyVar >> emptyVar >> penVar >> rmsePenVar >> nbVar){
 			vecEnergy.push_back(energyVar*1e-6);
-			vecSP.push_back(spVar*10/rho);
-			vecRMSE.push_back(rmseVar*10/rho);
+			vecDetour.push_back(penVar/rangeVar);
+			vecSME.push_back((TMath::Sqrt(
+				TMath::Power(rmseRangeVar*penVar/(rangeVar*rangeVar), 2)+
+				TMath::Power(rmsePenVar/(rangeVar*rangeVar), 2)/TMath::Sqrt(nbVar))
+			));
 		}
 		inputFile.close();
 		long long unsigned nSim = vecEnergy.size();
@@ -146,12 +153,12 @@ void plotProton()
 		TGraphAsymmErrors* graph = new TGraphAsymmErrors(nSim);
 		for (int i=0; i<nSim; ++i){
 			double x = vecEnergy[i];
-			double y = vecSP[i];
-			double rmse = vecRMSE[i];
+			double y = vecDetour[i];
+			double sme = vecSME[i];
 
 			graph->SetPoint(i, x, y);
 
-			graph->SetPointError(i, 0, 0, rmse, rmse);
+			graph->SetPointError(i, 0, 0, sme, sme);
 		}
 
 		
@@ -165,14 +172,14 @@ void plotProton()
 			graph->GetXaxis()->SetRangeUser(xAxisMin, xAxisMax);
 			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
 			graph->GetXaxis()->SetTitle("Energy, [MeV]");
-			graph->GetYaxis()->SetTitle("Stopping power #frac{S_{el}}{#rho}, #left[#frac{MeV cm^{2}}{g}#right]");
+			graph->GetYaxis()->SetTitle("Detour factor D = #frac{Range}{Penetration}");
 			//graph->GetYaxis()->SetTitleSize(0.062);
 			//graph->GetYaxis()->SetTitleOffset(0.45);
 			graph->GetYaxis()->SetTitleSize(0.04);
 			graph->GetYaxis()->SetTitleOffset(0.72);
 			graph->GetXaxis()->CenterTitle(true);
 			graph->GetYaxis()->CenterTitle(true);
-			graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
+			//graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
 			//graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
 
 			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО К ГРАНИЦЕ xAxisMax
@@ -218,8 +225,8 @@ void plotProton()
 			XaxisRes->SetTitleSize(0.09);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			XaxisRes->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
 			XaxisRes->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(1e5, -1, -1, -1, -1, -1, " ");
 			XaxisRes->SetTickSize(0.07);
 			XaxisRes->SetTitleOffset(1.2);
 		
@@ -231,10 +238,10 @@ void plotProton()
 			YaxisRes->SetLabelSize(0.06);
 			YaxisRes->CenterTitle(true);
 			
-			std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
+			/*std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
 			std::vector<double> y_err = {0., 0., 0., 0., 0.};
 			std::vector<double> ex = {0., 0., 0., 0., 0.};
-			std::vector<double> ey = {0.15, 0.1, 0.06, 0.03, 0.03};
+			std::vector<double> ey = {0.05, 0.015, 0.01, 0.01, 0.01};
 			TGraphErrors* icruBand = new TGraphErrors(x_err.size(), &x_err[0], &y_err[0], nullptr, &ey[0]);
 			icruBand->SetFillColorAlpha(kGray, 0.5);
 			icruBand->SetFillStyle(1001);
@@ -258,13 +265,13 @@ void plotProton()
 			yAxisBand->CenterTitle(true);
 			icruBand->SetTitle("");
 			//icruBand->GetXaxis()->SetMoreLogLabels();
-			icruBand->Draw("3"); 
+			icruBand->Draw("3"); */
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
 
-			legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
+			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
 
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
@@ -364,6 +371,6 @@ void plotProton()
 }
 
 const std::string FormCanvasName(std::string path, const std::string particleName){
-	if (path.find(particleName) != std::string::npos) return "Electronic Stopping power for " + particleName;
-	return "Electronic Stopping power";
+	if (path.find(particleName) != std::string::npos) return "Detour factor of " + particleName;
+	return "Detour factor";
 }

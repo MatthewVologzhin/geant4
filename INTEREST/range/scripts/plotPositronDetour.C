@@ -21,7 +21,7 @@ struct Parameters{
 	std::vector<std::string> names;
 };
 
-void plotElectronDetour()
+void plotPositronDetour()
 {
 	/* Auxilary variables */
 	double nm, um, mm, cm, m, MeV;
@@ -39,7 +39,7 @@ void plotElectronDetour()
 	gStyle->SetCanvasPreferGL(kTRUE);
 	gStyle->SetPadBorderSize(0);																										  
 	
-	/* Experimental data: electrons */	
+	/* Experimental data: positron */	
 	const int n = 49;
     double xData[n] = {
         0.0010, 0.0015, 0.0020, 0.0030, 0.0040, 0.0050, 0.0060, 0.0080, 0.0100,
@@ -50,21 +50,21 @@ void plotElectronDetour()
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
     double yData[n] = {
-        4.235E-06, 9.118E-06, 1.524E-05, 3.098E-05, 5.110E-05, 7.536E-05, 1.036E-04,
-		1.714E-04, 2.537E-04, 5.189E-04, 8.632E-04, 1.769E-03, 2.939E-03, 4.348E-03, 
-		5.978E-03, 9.833E-03, 1.439E-02, 2.933E-02, 4.512E-02, 8.464E-02, 1.294E-01, 
-		1.774E-01, 2.275E-01, 3.315E-01, 4.384e-01, 7.096e-01, 9.811e-01, 1.517E+00, 
-		2.041E+00, 2.554E+00, 3.057E+00, 4.035E+00, 4.980E+00, 7.226E+00, 9.327E+00, 
-		1.318E+01, 1.667E+01, 1.985E+01, 2.277E+01, 2.801E+01, 3.259E+01, 4.204E+01, 
-		4.955E+01, 6.110E+01, 6.986E+01, 7.692E+01, 8.284E+01, 9.239E+01, 9.994E+01
-    };
+		0.5212, 0.5364, 0.5501, 0.5737, 0.5934, 0.6102, 0.6250,
+		0.6497, 0.6700, 0.7080, 0.7352, 0.7724, 0.7973, 0.8155,
+		0.8296, 0.8503, 0.8649, 0.8886, 0.9032, 0.9212, 0.9323,
+		0.9402, 0.9462, 0.9551, 0.9615, 0.9722, 0.9789, 0.9867,
+		0.9907, 0.9931, 0.9946, 0.9963, 0.9973, 0.9983, 0.9988,
+		0.9992, 0.9993, 0.9991, 0.9994, 0.9995, 0.9995, 0.9996,
+		0.9996, 0.9996, 0.9996, 0.9997, 0.9997, 0.9997, 0.9997
+	};
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 
-	const std::string particleName = "e-";
+	const std::string particleName = "e+";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -88,7 +88,7 @@ void plotElectronDetour()
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
 	double yAxisMin = 3e-1;   
-	double yAxisMax = 4;
+	double yAxisMax = 3;
 	double xAxisMin = 0.001;
 	double xAxisMax = 1e5;
 	//double xAxisMax = 4641.5;
@@ -98,8 +98,8 @@ void plotElectronDetour()
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.99;
-	double yAxisResMax = 0.12;
+	double yAxisResMin = -0.32;
+	double yAxisResMax = 0.07;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */

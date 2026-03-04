@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../../icsd"
+		},
+		{
+			"path": "../../spower"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../START/ionradial"
+		}
+	],
+	"settings": {}
+}

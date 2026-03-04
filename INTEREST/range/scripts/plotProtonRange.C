@@ -21,11 +21,12 @@ struct Parameters{
 	std::vector<std::string> names;
 };
 
-void plotC12()
+void plotProtonRange()
 {
 	/* Auxilary variables */
-	double nm, um, mm, m, MeV;
+	double nm, um, mm, cm, m, MeV;
 	m =  1e9; 
+	cm = 1e-2*m;
 	mm = 1e-3*m;
 	um = 1e-6*m;
 	nm = 1e-9*m;
@@ -48,22 +49,22 @@ void plotC12()
         40.0000, 50.0000, 60.0000, 80.0000, 100.0000, 150.0000, 200.0000, 300.0000,
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
-    double yData[n] = {
-    	1.421E+02, 1.773E+02, 2.075E+02, 2.589E+02, 3.047E+02, 3.416E+02, 3.776E+02,
-    	4.412E+02, 4.975E+02, 6.183E+02, 7.207E+02, 8.930E+02, 1.038E+03, 1.166E+03,
-    	1.281E+03, 1.488E+03, 1.676E+03, 2.099E+03, 2.476E+03, 3.131E+03, 3.696E+03,
-    	4.198E+03, 4.652E+03, 5.446E+03, 6.116E+03, 7.364E+03, 8.139E+03, 8.791E+03,
-    	8.708E+03, 8.372E+03, 8.029E+03, 7.422E+03, 6.926E+03, 5.980E+03, 5.284E+03,
-    	4.297E+03, 3.627E+03, 3.134E+03, 2.750E+03, 2.207E+03, 1.855E+03, 1.346E+03,
-    	1.069E+03, 7.717E+02, 6.124E+02, 5.123E+02, 4.434E+02, 3.540E+02, 2.984E+02
+	double yData[n] = {
+		6.319E-06, 8.969E-06, 1.137E-05, 1.560E-05, 1.930E-05, 2.262E-05, 2.567E-05,
+		3.113E-05, 3.599E-05, 4.657E-05, 5.578E-05, 7.187E-05, 8.613E-05, 9.935E-05,
+		1.120E-04, 1.364E-04, 1.607E-04, 2.249E-04, 2.967E-04, 4.645E-04, 6.640E-04,
+		8.945E-04, 1.155E-03, 1.765E-03, 2.487E-03, 4.753E-03, 7.639E-03, 1.514E-02,
+		2.482E-02, 3.656E-02, 5.028E-02, 8.346E-02, 1.240E-01, 2.558E-01, 4.289E-01,
+		8.910E-01, 1.498E+00, 2.240E+00, 3.111E+00, 5.212E+00, 7.759E+00, 1.586E+01,
+		2.609E+01, 5.170E+01, 8.263E+01, 1.176E+02, 1.556E+02, 2.382E+02, 3.268E+02
 	};
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 
-	const std::string particleName = "C12";
+	const std::string particleName = "proton";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -86,18 +87,19 @@ void plotC12()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 1.0;   
-	double yAxisMax = 5e4;
-	double xAxisMin = 1e-3;
-	double xAxisMax = 4641.5;
+	double yAxisMin = 2e-6;   
+	double yAxisMax = 1e7;
+	double xAxisMin = 0.001;
+	double xAxisMax = 1e5;
+	//double xAxisMax = 4641.5;
 	//double xAxisMax = 1000.0;
 	double nbBins = 1;
 
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -1.2;
-	double yAxisResMax = 1.2;
+	double yAxisResMin = -0.6;
+	double yAxisResMax = 0.13;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */
@@ -131,14 +133,17 @@ void plotC12()
 		pad1->cd();
 		/* Fetch the data from .txt files */
 		std::ifstream inputFile(parameters.paths[name]);
-		std::vector<double> vecEnergy, vecSP, vecRMSE;
+		std::vector<double> vecEnergy, vecRange, vecSME;
 
 		double rho = 0.998;
-		double energyVar, spVar, rmseVar;
-		while (inputFile >> energyVar >> spVar >> rmseVar){
+		double energyVar, rangeVar, rmseVar, emptyVar, nbVar;
+		while (inputFile >> energyVar >> rangeVar >> rmseVar 
+						 >> emptyVar >> emptyVar >> emptyVar >> emptyVar
+						 >> nbVar){
 			vecEnergy.push_back(energyVar*1e-6);
-			vecSP.push_back(spVar*10/rho);
-			vecRMSE.push_back(rmseVar*10/rho);
+			vecRange.push_back(rangeVar*rho/cm);
+			vecSME.push_back(rmseVar*rho/cm/TMath::Sqrt(nbVar));
+			//vecNb.push_back(nbVar);
 		}
 		inputFile.close();
 		long long unsigned nSim = vecEnergy.size();
@@ -147,12 +152,12 @@ void plotC12()
 		TGraphAsymmErrors* graph = new TGraphAsymmErrors(nSim);
 		for (int i=0; i<nSim; ++i){
 			double x = vecEnergy[i];
-			double y = vecSP[i];
-			double rmse = vecRMSE[i];
+			double y = vecRange[i];
+			double sme = vecSME[i];
 
 			graph->SetPoint(i, x, y);
 
-			graph->SetPointError(i, 0, 0, rmse, rmse);
+			graph->SetPointError(i, 0, 0, sme, sme);
 		}
 
 		
@@ -166,14 +171,14 @@ void plotC12()
 			graph->GetXaxis()->SetRangeUser(xAxisMin, xAxisMax);
 			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
 			graph->GetXaxis()->SetTitle("Energy, [MeV]");
-			graph->GetYaxis()->SetTitle("Stopping power #frac{S_{el}}{#rho}, #left[#frac{MeV cm^{2}}{g}#right]");
+			graph->GetYaxis()->SetTitle("Range #rhor, [g cm^{-2}] ");
 			//graph->GetYaxis()->SetTitleSize(0.062);
 			//graph->GetYaxis()->SetTitleOffset(0.45);
 			graph->GetYaxis()->SetTitleSize(0.04);
 			graph->GetYaxis()->SetTitleOffset(0.72);
 			graph->GetXaxis()->CenterTitle(true);
 			graph->GetYaxis()->CenterTitle(true);
-			graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
+			//graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
 			//graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
 
 			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО К ГРАНИЦЕ xAxisMax
@@ -219,8 +224,8 @@ void plotC12()
 			XaxisRes->SetTitleSize(0.09);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			XaxisRes->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
 			XaxisRes->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(1e5, -1, -1, -1, -1, -1, " ");
 			XaxisRes->SetTickSize(0.07);
 			XaxisRes->SetTitleOffset(1.2);
 		
@@ -232,10 +237,10 @@ void plotC12()
 			YaxisRes->SetLabelSize(0.06);
 			YaxisRes->CenterTitle(true);
 			
-			std::vector<double> x_err = {0.001, 0.1, 1., 10., 100., 1000.};
+			/*std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
 			std::vector<double> y_err = {0., 0., 0., 0., 0.};
 			std::vector<double> ex = {0., 0., 0., 0., 0.};
-			std::vector<double> ey = {1., 0.3, 0.15, 0.05, 0.02, 0.02};
+			std::vector<double> ey = {0.05, 0.015, 0.01, 0.01, 0.01};
 			TGraphErrors* icruBand = new TGraphErrors(x_err.size(), &x_err[0], &y_err[0], nullptr, &ey[0]);
 			icruBand->SetFillColorAlpha(kGray, 0.5);
 			icruBand->SetFillStyle(1001);
@@ -259,13 +264,14 @@ void plotC12()
 			yAxisBand->CenterTitle(true);
 			icruBand->SetTitle("");
 			//icruBand->GetXaxis()->SetMoreLogLabels();
-			icruBand->Draw("3"); 
+			icruBand->Draw("3"); */
+			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
 
-			legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
+			
 
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
@@ -365,6 +371,6 @@ void plotC12()
 }
 
 const std::string FormCanvasName(std::string path, const std::string particleName){
-	if (path.find(particleName) != std::string::npos) return "Electronic Stopping power for " + particleName;
-	return "Electronic Stopping power";
+	if (path.find(particleName) != std::string::npos) return "Range of " + particleName;
+	return "Range";
 }

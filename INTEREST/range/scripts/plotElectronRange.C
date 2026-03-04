@@ -64,7 +64,7 @@ void plotElectronRange()
 	const std::string particleName = "e-";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -90,15 +90,16 @@ void plotElectronRange()
 	double yAxisMin = 2e-6;   
 	double yAxisMax = 1e7;
 	double xAxisMin = 0.001;
-	double xAxisMax = 4641.5;
+	double xAxisMax = 1e5;
+	//double xAxisMax = 4641.5;
 	//double xAxisMax = 1000.0;
 	double nbBins = 1;
 
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.99;
-	double yAxisResMax = 0.12;
+	double yAxisResMin = -0.92;
+	double yAxisResMax = 0.18;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */
@@ -132,15 +133,17 @@ void plotElectronRange()
 		pad1->cd();
 		/* Fetch the data from .txt files */
 		std::ifstream inputFile(parameters.paths[name]);
-		std::vector<double> vecEnergy, vecRange, vecRMSE;
+		std::vector<double> vecEnergy, vecRange, vecSME;
 
 		double rho = 0.998;
-		double energyVar, rangeVar, rmseVar, emptyVar;
+		double energyVar, rangeVar, rmseVar, emptyVar, nbVar;
 		while (inputFile >> energyVar >> rangeVar >> rmseVar 
-						 >> emptyVar >> emptyVar >> emptyVar >> emptyVar){
+						 >> emptyVar >> emptyVar >> emptyVar >> emptyVar
+						 >> nbVar){
 			vecEnergy.push_back(energyVar*1e-6);
 			vecRange.push_back(rangeVar*rho/cm);
-			vecRMSE.push_back(rmseVar*rho/cm);
+			vecSME.push_back(rmseVar*rho/cm/TMath::Sqrt(nbVar));
+			//vecNb.push_back(nbVar);
 		}
 		inputFile.close();
 		long long unsigned nSim = vecEnergy.size();
@@ -150,11 +153,11 @@ void plotElectronRange()
 		for (int i=0; i<nSim; ++i){
 			double x = vecEnergy[i];
 			double y = vecRange[i];
-			double rmse = vecRMSE[i];
+			double sme = vecSME[i];
 
 			graph->SetPoint(i, x, y);
 
-			graph->SetPointError(i, 0, 0, rmse, rmse);
+			graph->SetPointError(i, 0, 0, sme, sme);
 		}
 
 		
@@ -221,8 +224,8 @@ void plotElectronRange()
 			XaxisRes->SetTitleSize(0.09);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			XaxisRes->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
 			XaxisRes->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(1e5, -1, -1, -1, -1, -1, " ");
 			XaxisRes->SetTickSize(0.07);
 			XaxisRes->SetTitleOffset(1.2);
 		
@@ -234,7 +237,7 @@ void plotElectronRange()
 			YaxisRes->SetLabelSize(0.06);
 			YaxisRes->CenterTitle(true);
 			
-			std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
+			/*std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
 			std::vector<double> y_err = {0., 0., 0., 0., 0.};
 			std::vector<double> ex = {0., 0., 0., 0., 0.};
 			std::vector<double> ey = {0.05, 0.015, 0.01, 0.01, 0.01};
@@ -261,13 +264,14 @@ void plotElectronRange()
 			yAxisBand->CenterTitle(true);
 			icruBand->SetTitle("");
 			//icruBand->GetXaxis()->SetMoreLogLabels();
-			icruBand->Draw("3"); 
+			icruBand->Draw("3"); */
+			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
 
-			legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
+			
 
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
@@ -365,6 +369,7 @@ void plotElectronRange()
 	if (!fs::exists(folderName)) fs::create_directory(folderName);
 	mainCanvas->SaveAs((folderName + "/" + canvasName + ".pdf").c_str());
 }
+
 
 const std::string FormCanvasName(std::string path, const std::string particleName){
 	if (path.find(particleName) != std::string::npos) return "Range of " + particleName;

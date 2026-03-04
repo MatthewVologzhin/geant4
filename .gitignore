@@ -14,11 +14,14 @@
 # 5. Разрешаем заходить в INTEREST, но игнорируем там всё
 !INTEREST/
 INTEREST/*
+!START/
+START/*
 
 # 6. Разрешаем конкретные проекты внутри INTEREST
 !INTEREST/icsd/
 !INTEREST/range/
 !INTEREST/spower/
+!START/ionradial
 
 # 7. Глобальный фильтр мусора (Geant4, VS Code, системы)
 **/build/

@@ -21,11 +21,12 @@ struct Parameters{
 	std::vector<std::string> names;
 };
 
-void plotAlpha()
+void plotAlphaRange()
 {
 	/* Auxilary variables */
-	double nm, um, mm, m, MeV;
+	double nm, um, mm, cm, m, MeV;
 	m =  1e9; 
+	cm = 1e-2*m;
 	mm = 1e-3*m;
 	um = 1e-6*m;
 	nm = 1e-9*m;
@@ -38,7 +39,7 @@ void plotAlpha()
 	gStyle->SetCanvasPreferGL(kTRUE);
 	gStyle->SetPadBorderSize(0);																										  
 	
-	/* Experimental data: electrons */	
+	/* Experimental data: alpha */	
 	const int n = 49;
     double xData[n] = {
         0.0010, 0.0015, 0.0020, 0.0030, 0.0040, 0.0050, 0.0060, 0.0080, 0.0100,
@@ -48,22 +49,22 @@ void plotAlpha()
         40.0000, 50.0000, 60.0000, 80.0000, 100.0000, 150.0000, 200.0000, 300.0000,
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
-    double yData[n] = {
-    	9.981E+01, 1.228E+02, 1.431E+02, 1.776E+02, 2.069E+02, 2.330E+02, 2.568E+02,
-		2.993E+02, 3.370E+02, 4.181E+02, 4.871E+02, 6.039E+02, 7.030E+02, 7.905E+02, 
-		8.696E+02, 1.009E+03, 1.131E+03, 1.383E+03, 1.582E+03, 1.873E+03, 2.062E+03, 
-		2.178E+03, 2.240E+03, 2.256E+03, 2.190E+03, 1.877E+03, 1.599E+03, 1.239E+03, 
-		1.021E+03, 8.747E+02, 7.687E+02, 6.239E+02, 5.290E+02, 3.894E+02, 3.118E+02, 
-		2.267E+02, 1.802E+02, 1.506E+02, 1.300E+02, 1.030E+02, 8.593E+01, 6.194E+01, 
-		4.923E+01, 3.586E+01, 2.885E+01, 2.452E+01, 2.156E+01, 1.780E+01, 1.550E+01
-    };
+	double yData[n] = {
+		3.273E-06, 4.789E-06, 6.294E-06, 9.247E-06, 1.211E-05, 1.489E-05, 1.757E-05,
+		2.267E-05, 2.746E-05, 3.831E-05, 4.793E-05, 6.462E-05, 7.900E-05, 9.179E-05,
+		1.034E-04, 1.241E-04, 1.425E-04, 1.817E-04, 2.151E-04, 2.725E-04, 3.230E-04,
+		3.699E-04, 4.150E-04, 5.034E-04, 5.931E-04, 8.385E-04, 1.128E-03, 1.844E-03,
+		2.737E-03, 3.798E-03, 5.020E-03, 7.924E-03, 1.142E-02, 2.258E-02, 3.702E-02,
+		7.514E-02, 1.250E-01, 1.859E-01, 2.575E-01, 4.317E-01, 6.452E-01, 1.341E+00,
+		2.253E+00, 4.670E+00, 7.802E+00, 1.158E+01, 1.594E+01, 2.622E+01, 3.830E+01
+	};
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 
 	const std::string particleName = "alpha";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -86,18 +87,19 @@ void plotAlpha()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 1.0;   
-	double yAxisMax = 10000.0;
+	double yAxisMin = 2e-7;   
+	double yAxisMax = 1e7;
 	double xAxisMin = 0.001;
-	double xAxisMax = 4641.5;
+	double xAxisMax = 1e5;
+	//double xAxisMax = 4641.5;
 	//double xAxisMax = 1000.0;
 	double nbBins = 1;
 
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.2;
-	double yAxisResMax = 0.2;
+	double yAxisResMin = -0.32;
+	double yAxisResMax = 0.19;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */
@@ -131,14 +133,17 @@ void plotAlpha()
 		pad1->cd();
 		/* Fetch the data from .txt files */
 		std::ifstream inputFile(parameters.paths[name]);
-		std::vector<double> vecEnergy, vecSP, vecRMSE;
+		std::vector<double> vecEnergy, vecRange, vecSME;
 
 		double rho = 0.998;
-		double energyVar, spVar, rmseVar;
-		while (inputFile >> energyVar >> spVar >> rmseVar){
+		double energyVar, rangeVar, rmseVar, emptyVar, nbVar;
+		while (inputFile >> energyVar >> rangeVar >> rmseVar 
+						 >> emptyVar >> emptyVar >> emptyVar >> emptyVar
+						 >> nbVar){
 			vecEnergy.push_back(energyVar*1e-6);
-			vecSP.push_back(spVar*10/rho);
-			vecRMSE.push_back(rmseVar*10/rho);
+			vecRange.push_back(rangeVar*rho/cm);
+			vecSME.push_back(rmseVar*rho/cm/TMath::Sqrt(nbVar));
+			//vecNb.push_back(nbVar);
 		}
 		inputFile.close();
 		long long unsigned nSim = vecEnergy.size();
@@ -147,12 +152,12 @@ void plotAlpha()
 		TGraphAsymmErrors* graph = new TGraphAsymmErrors(nSim);
 		for (int i=0; i<nSim; ++i){
 			double x = vecEnergy[i];
-			double y = vecSP[i];
-			double rmse = vecRMSE[i];
+			double y = vecRange[i];
+			double sme = vecSME[i];
 
 			graph->SetPoint(i, x, y);
 
-			graph->SetPointError(i, 0, 0, rmse, rmse);
+			graph->SetPointError(i, 0, 0, sme, sme);
 		}
 
 		
@@ -166,14 +171,14 @@ void plotAlpha()
 			graph->GetXaxis()->SetRangeUser(xAxisMin, xAxisMax);
 			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
 			graph->GetXaxis()->SetTitle("Energy, [MeV]");
-			graph->GetYaxis()->SetTitle("Stopping power #frac{S_{el}}{#rho}, #left[#frac{MeV cm^{2}}{g}#right]");
+			graph->GetYaxis()->SetTitle("Range #rhor, [g cm^{-2}] ");
 			//graph->GetYaxis()->SetTitleSize(0.062);
 			//graph->GetYaxis()->SetTitleOffset(0.45);
 			graph->GetYaxis()->SetTitleSize(0.04);
 			graph->GetYaxis()->SetTitleOffset(0.72);
 			graph->GetXaxis()->CenterTitle(true);
 			graph->GetYaxis()->CenterTitle(true);
-			graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
+			//graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
 			//graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
 
 			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО К ГРАНИЦЕ xAxisMax
@@ -219,8 +224,8 @@ void plotAlpha()
 			XaxisRes->SetTitleSize(0.09);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			XaxisRes->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
 			XaxisRes->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(1e5, -1, -1, -1, -1, -1, " ");
 			XaxisRes->SetTickSize(0.07);
 			XaxisRes->SetTitleOffset(1.2);
 		
@@ -232,10 +237,10 @@ void plotAlpha()
 			YaxisRes->SetLabelSize(0.06);
 			YaxisRes->CenterTitle(true);
 			
-			std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
+			/*std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
 			std::vector<double> y_err = {0., 0., 0., 0., 0.};
 			std::vector<double> ex = {0., 0., 0., 0., 0.};
-			std::vector<double> ey = {0.15, 0.1, 0.06, 0.03, 0.03};
+			std::vector<double> ey = {0.05, 0.015, 0.01, 0.01, 0.01};
 			TGraphErrors* icruBand = new TGraphErrors(x_err.size(), &x_err[0], &y_err[0], nullptr, &ey[0]);
 			icruBand->SetFillColorAlpha(kGray, 0.5);
 			icruBand->SetFillStyle(1001);
@@ -259,13 +264,14 @@ void plotAlpha()
 			yAxisBand->CenterTitle(true);
 			icruBand->SetTitle("");
 			//icruBand->GetXaxis()->SetMoreLogLabels();
-			icruBand->Draw("3"); 
+			icruBand->Draw("3"); */
+			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
 
-			legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
+			
 
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
@@ -365,6 +371,6 @@ void plotAlpha()
 }
 
 const std::string FormCanvasName(std::string path, const std::string particleName){
-	if (path.find(particleName) != std::string::npos) return "Electronic Stopping power for " + particleName;
-	return "Electronic Stopping power";
+	if (path.find(particleName) != std::string::npos) return "Range of " + particleName;
+	return "Range";
 }

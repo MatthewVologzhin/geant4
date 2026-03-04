@@ -21,7 +21,7 @@ struct Parameters{
 	std::vector<std::string> names;
 };
 
-void plotElectronDetour()
+void plotPositronRange()
 {
 	/* Auxilary variables */
 	double nm, um, mm, cm, m, MeV;
@@ -39,7 +39,7 @@ void plotElectronDetour()
 	gStyle->SetCanvasPreferGL(kTRUE);
 	gStyle->SetPadBorderSize(0);																										  
 	
-	/* Experimental data: electrons */	
+	/* Experimental data: positron */	
 	const int n = 49;
     double xData[n] = {
         0.0010, 0.0015, 0.0020, 0.0030, 0.0040, 0.0050, 0.0060, 0.0080, 0.0100,
@@ -49,22 +49,22 @@ void plotElectronDetour()
         40.0000, 50.0000, 60.0000, 80.0000, 100.0000, 150.0000, 200.0000, 300.0000,
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
-    double yData[n] = {
-        4.235E-06, 9.118E-06, 1.524E-05, 3.098E-05, 5.110E-05, 7.536E-05, 1.036E-04,
-		1.714E-04, 2.537E-04, 5.189E-04, 8.632E-04, 1.769E-03, 2.939E-03, 4.348E-03, 
-		5.978E-03, 9.833E-03, 1.439E-02, 2.933E-02, 4.512E-02, 8.464E-02, 1.294E-01, 
-		1.774E-01, 2.275E-01, 3.315E-01, 4.384e-01, 7.096e-01, 9.811e-01, 1.517E+00, 
-		2.041E+00, 2.554E+00, 3.057E+00, 4.035E+00, 4.980E+00, 7.226E+00, 9.327E+00, 
-		1.318E+01, 1.667E+01, 1.985E+01, 2.277E+01, 2.801E+01, 3.259E+01, 4.204E+01, 
-		4.955E+01, 6.110E+01, 6.986E+01, 7.692E+01, 8.284E+01, 9.239E+01, 9.994E+01
-    };
+	double yData[n] = {
+		3.534E-06, 7.661E-06, 1.293E-05, 2.665E-05, 4.440E-05, 6.597E-05, 9.121E-05,
+		1.523E-04, 2.268E-04, 4.689E-04, 7.857E-04, 1.626E-03, 2.720E-03, 4.046E-03,
+		5.588E-03, 9.261E-03, 1.364E-02, 2.715E-02, 4.360E-02, 8.278E-02, 1.276E-01,
+		1.760E-01, 2.267E-01, 3.324E-01, 4.414E-01, 7.191E-01, 9.976E-01, 1.548E+00,
+		2.087E+00, 2.614E+00, 3.131E+00, 4.136E+00, 5.107E+00, 7.410E+00, 9.563E+00,
+		1.351E+01, 1.706E+01, 2.029E+01, 2.327E+01, 2.857E+01, 3.320E+01, 4.269E+01,
+		5.019E+01, 6.165E+01, 7.029E+01, 7.721E+01, 8.299E+01, 9.227E+01, 9.957E+01
+	};
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 
-	const std::string particleName = "e-";
+	const std::string particleName = "e+";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -87,8 +87,8 @@ void plotElectronDetour()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 3e-1;   
-	double yAxisMax = 4;
+	double yAxisMin = 2e-7;   
+	double yAxisMax = 1e7;
 	double xAxisMin = 0.001;
 	double xAxisMax = 1e5;
 	//double xAxisMax = 4641.5;
@@ -98,8 +98,8 @@ void plotElectronDetour()
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.99;
-	double yAxisResMax = 0.12;
+	double yAxisResMin = -0.32;
+	double yAxisResMax = 0.19;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */
@@ -133,18 +133,17 @@ void plotElectronDetour()
 		pad1->cd();
 		/* Fetch the data from .txt files */
 		std::ifstream inputFile(parameters.paths[name]);
-		std::vector<double> vecEnergy, vecDetour, vecSME;
+		std::vector<double> vecEnergy, vecRange, vecSME;
 
 		double rho = 0.998;
-		double energyVar, rangeVar, rmseRangeVar, penVar, rmsePenVar, emptyVar, nbVar;
-		while (inputFile >> energyVar >> rangeVar >> rmseRangeVar 
-						 >> emptyVar >> emptyVar >> penVar >> rmsePenVar >> nbVar){
+		double energyVar, rangeVar, rmseVar, emptyVar, nbVar;
+		while (inputFile >> energyVar >> rangeVar >> rmseVar 
+						 >> emptyVar >> emptyVar >> emptyVar >> emptyVar
+						 >> nbVar){
 			vecEnergy.push_back(energyVar*1e-6);
-			vecDetour.push_back(penVar/rangeVar);
-			vecSME.push_back((TMath::Sqrt(
-				TMath::Power(rmseRangeVar*penVar/(rangeVar*rangeVar), 2)+
-				TMath::Power(rmsePenVar/(rangeVar*rangeVar), 2)/TMath::Sqrt(nbVar))
-			));
+			vecRange.push_back(rangeVar*rho/cm);
+			vecSME.push_back(rmseVar*rho/cm/TMath::Sqrt(nbVar));
+			//vecNb.push_back(nbVar);
 		}
 		inputFile.close();
 		long long unsigned nSim = vecEnergy.size();
@@ -153,7 +152,7 @@ void plotElectronDetour()
 		TGraphAsymmErrors* graph = new TGraphAsymmErrors(nSim);
 		for (int i=0; i<nSim; ++i){
 			double x = vecEnergy[i];
-			double y = vecDetour[i];
+			double y = vecRange[i];
 			double sme = vecSME[i];
 
 			graph->SetPoint(i, x, y);
@@ -172,7 +171,7 @@ void plotElectronDetour()
 			graph->GetXaxis()->SetRangeUser(xAxisMin, xAxisMax);
 			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
 			graph->GetXaxis()->SetTitle("Energy, [MeV]");
-			graph->GetYaxis()->SetTitle("Detour factor D = #frac{Range}{Penetration}");
+			graph->GetYaxis()->SetTitle("Range #rhor, [g cm^{-2}] ");
 			//graph->GetYaxis()->SetTitleSize(0.062);
 			//graph->GetYaxis()->SetTitleOffset(0.45);
 			graph->GetYaxis()->SetTitleSize(0.04);
@@ -266,12 +265,13 @@ void plotElectronDetour()
 			icruBand->SetTitle("");
 			//icruBand->GetXaxis()->SetMoreLogLabels();
 			icruBand->Draw("3"); */
+			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
 
-			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
+			
 
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
@@ -308,12 +308,12 @@ void plotElectronDetour()
 			pad2->RedrawAxis();
 		}
 		
-		/*TGraph* splineRes = new TGraph(n, xData, res);
+		TGraph* splineRes = new TGraph(n, xData, res);
 		splineRes->SetLineWidth(lineWidth);
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
 
-		TGraphAsymmErrors* splineRes = new TGraphAsymmErrors(n);
+		/*TGraphAsymmErrors* splineRes = new TGraphAsymmErrors(n);
 		for (int i=0; i<n; ++i){
 			double x = xData[i];
 			double y = res[i];
@@ -322,12 +322,11 @@ void plotElectronDetour()
 			splineRes->SetPoint(i, x, y);
 			splineRes->SetPointError(i, 0, 0, rmse, rmse);
 		}*/
-		/*
 		splineRes->SetLineWidth(lineWidth);
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
 
-		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");*/
+		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
 		legendRes->Draw();
 		
 		counter++;
@@ -342,7 +341,7 @@ void plotElectronDetour()
 	graphExp->Draw("P SAME");
 	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");*/
 
-	/*TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
+	TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
 	for (int i=0; i < n; i++){
 		double x = xData[i];
 		double y = yData[i];
@@ -354,14 +353,14 @@ void plotElectronDetour()
 
 		graphExp->SetPoint(i, x, y);
 		graphExp->SetPointError(i, 0, 0, y*relErr, y*relErr);
-	}*/
+	}
 
-	/*graphExp->SetMarkerStyle(25);
+	graphExp->SetMarkerStyle(25);
 	//graphExp->SetMarkerStyle();
 	graphExp->SetMarkerSize(3);
 	graphExp->SetMarkerColor(kBlack);
 	graphExp->Draw("P E SAME");
-	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");*/
+	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");
 	
 	legend->Draw();
 	mainCanvas->Update();
@@ -372,6 +371,6 @@ void plotElectronDetour()
 }
 
 const std::string FormCanvasName(std::string path, const std::string particleName){
-	if (path.find(particleName) != std::string::npos) return "Detour factor of " + particleName;
-	return "Detour factor";
+	if (path.find(particleName) != std::string::npos) return "Range of " + particleName;
+	return "Range";
 }

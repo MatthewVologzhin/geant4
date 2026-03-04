@@ -21,7 +21,7 @@ struct Parameters{
 	std::vector<std::string> names;
 };
 
-void plotElectronDetour()
+void plotProtonDetour()
 {
 	/* Auxilary variables */
 	double nm, um, mm, cm, m, MeV;
@@ -50,21 +50,21 @@ void plotElectronDetour()
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
     double yData[n] = {
-        4.235E-06, 9.118E-06, 1.524E-05, 3.098E-05, 5.110E-05, 7.536E-05, 1.036E-04,
-		1.714E-04, 2.537E-04, 5.189E-04, 8.632E-04, 1.769E-03, 2.939E-03, 4.348E-03, 
-		5.978E-03, 9.833E-03, 1.439E-02, 2.933E-02, 4.512E-02, 8.464E-02, 1.294E-01, 
-		1.774E-01, 2.275E-01, 3.315E-01, 4.384e-01, 7.096e-01, 9.811e-01, 1.517E+00, 
-		2.041E+00, 2.554E+00, 3.057E+00, 4.035E+00, 4.980E+00, 7.226E+00, 9.327E+00, 
-		1.318E+01, 1.667E+01, 1.985E+01, 2.277E+01, 2.801E+01, 3.259E+01, 4.204E+01, 
-		4.955E+01, 6.110E+01, 6.986E+01, 7.692E+01, 8.284E+01, 9.239E+01, 9.994E+01
-    };
+		0.4555, 0.4906, 0.5197, 0.5647, 0.5986, 0.6254, 0.6473,
+		0.6813, 0.7070, 0.7514, 0.7808, 0.8187, 0.8429, 0.8602,
+		0.8735, 0.8931, 0.9073, 0.9310, 0.9460, 0.9635, 0.9731,
+		0.9790, 0.9829, 0.9877, 0.9905, 0.9938, 0.9952, 0.9965,
+		0.9971, 0.9974, 0.9976, 0.9978, 0.9980, 0.9982, 0.9983,
+		0.9984, 0.9985, 0.9985, 0.9986, 0.9986, 0.9987, 0.9987,
+		0.9988, 0.9989, 0.9990, 0.9990, 0.9991, 0.9992, 0.9992
+	};
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 
-	const std::string particleName = "e-";
+	const std::string particleName = "proton";
 
 	Parameters parameters;
-	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "S4"};
 	//parameters.names = {"DNA2"};
 	parameters.paths["DNA2"]  = "root/" + particleName + "_DNA2.txt";
 	parameters.paths["DNA4"]  = "root/" + particleName + "_DNA4.txt";
@@ -88,7 +88,7 @@ void plotElectronDetour()
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
 	double yAxisMin = 3e-1;   
-	double yAxisMax = 4;
+	double yAxisMax = 3;
 	double xAxisMin = 0.001;
 	double xAxisMax = 1e5;
 	//double xAxisMax = 4641.5;
@@ -98,8 +98,8 @@ void plotElectronDetour()
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.99;
-	double yAxisResMax = 0.12;
+	double yAxisResMin = -0.17;
+	double yAxisResMax = 0.14;
 	double authorsTextSize = 0.0252;
 
 	/* Canvas initialization */
@@ -308,12 +308,12 @@ void plotElectronDetour()
 			pad2->RedrawAxis();
 		}
 		
-		/*TGraph* splineRes = new TGraph(n, xData, res);
+		TGraph* splineRes = new TGraph(n, xData, res);
 		splineRes->SetLineWidth(lineWidth);
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
 
-		TGraphAsymmErrors* splineRes = new TGraphAsymmErrors(n);
+		/*TGraphAsymmErrors* splineRes = new TGraphAsymmErrors(n);
 		for (int i=0; i<n; ++i){
 			double x = xData[i];
 			double y = res[i];
@@ -322,12 +322,11 @@ void plotElectronDetour()
 			splineRes->SetPoint(i, x, y);
 			splineRes->SetPointError(i, 0, 0, rmse, rmse);
 		}*/
-		/*
 		splineRes->SetLineWidth(lineWidth);
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
 
-		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");*/
+		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
 		legendRes->Draw();
 		
 		counter++;
@@ -342,7 +341,7 @@ void plotElectronDetour()
 	graphExp->Draw("P SAME");
 	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");*/
 
-	/*TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
+	TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
 	for (int i=0; i < n; i++){
 		double x = xData[i];
 		double y = yData[i];
@@ -354,14 +353,14 @@ void plotElectronDetour()
 
 		graphExp->SetPoint(i, x, y);
 		graphExp->SetPointError(i, 0, 0, y*relErr, y*relErr);
-	}*/
+	}
 
-	/*graphExp->SetMarkerStyle(25);
+	graphExp->SetMarkerStyle(25);
 	//graphExp->SetMarkerStyle();
 	graphExp->SetMarkerSize(3);
 	graphExp->SetMarkerColor(kBlack);
 	graphExp->Draw("P E SAME");
-	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");*/
+	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");
 	
 	legend->Draw();
 	mainCanvas->Update();
