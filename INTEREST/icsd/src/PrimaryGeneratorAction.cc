@@ -65,10 +65,16 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* anEvent)
 {
   G4Tubs* targetSolid =
     dynamic_cast<G4Tubs*>(G4LogicalVolumeStore::GetInstance()->GetVolume("Target")->GetSolid());
+  G4LogicalVolume* logWall = G4LogicalVolumeStore::GetInstance()->GetVolume("Wall", false);
 
   if (targetSolid != nullptr) {
     G4double radius = targetSolid->GetOuterRadius();
     fpParticleGun->SetParticlePosition(G4ThreeVector(-radius, 0., 0));
+    if (logWall != nullptr){
+      G4Tubs* wallSolid = dynamic_cast<G4Tubs*>(logWall->GetSolid());
+      radius = wallSolid->GetOuterRadius();
+      fpParticleGun->SetParticlePosition(G4ThreeVector(-radius, 0., 0));
+    }
   }
 
   fpParticleGun->GeneratePrimaryVertex(anEvent);

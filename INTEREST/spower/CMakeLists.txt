@@ -40,7 +40,7 @@ target_link_libraries(spower ${Geant4_LIBRARIES} )
 # relies on these scripts being in the current working directory.
 #
 set(spower_SCRIPTS
-    spower.in secondary.in plot.C
+    spower.in secondary.in plot.C run.sh parameters.txt run_geant4.sh submit.sub create_parameters.py
   )
 
 foreach(_script ${spower_SCRIPTS})

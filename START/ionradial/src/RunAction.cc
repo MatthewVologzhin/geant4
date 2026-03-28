@@ -11,11 +11,11 @@
 #include <G4RunManager.hh>
 #include <filesystem>
 #include <algorithm>
-#include "TTree.h"
-#include "TFile.h"
-#include "TH1F.h"
-#include "TNtuple.h"
-#include "TROOT.h"
+//#include "TTree.h"
+//#include "TFile.h"
+//#include "TH1F.h"
+//#include "TNtuple.h"
+//#include "TROOT.h"
 #include "RunAction.hh"
 
 RunAction::RunAction(){

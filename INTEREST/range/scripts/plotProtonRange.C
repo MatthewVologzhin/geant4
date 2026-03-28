@@ -88,12 +88,15 @@ void plotProtonRange()
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
 	double yAxisMin = 2e-6;   
-	double yAxisMax = 1e7;
+	double yAxisMax = 1e3;
 	double xAxisMin = 0.001;
 	double xAxisMax = 1e5;
-	//double xAxisMax = 4641.5;
-	//double xAxisMax = 1000.0;
 	double nbBins = 1;
+	double systemError = 0.05;
+	std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
+	std::vector<double> y_err = {0., 0., 0., 0., 0.};
+	std::vector<double> ex = {0., 0., 0., 0., 0.};
+	std::vector<double> ey = {0.15, 0.1, 0.06, 0.03, 0.03};
 
 	// Фиксированные координаты легенды NDC
 	double xMinLeg = 0.7; 
@@ -121,7 +124,7 @@ void plotProtonRange()
 	TAxis *XaxisRes = hFrame->GetXaxis();
 	TAxis *YaxisRes = hFrame->GetYaxis();
 	
-	TLegend *legend = new TLegend(xMinLeg, 0.6, xMaxLeg, 0.9);
+	TLegend *legend = new TLegend(0.1, 0.6, 0.1 + xMaxLeg - xMinLeg, 0.9);
 	legend->SetTextSize(0.045);
 	legend->SetBorderSize(1); 
 	
@@ -165,28 +168,52 @@ void plotProtonRange()
 		graph->SetLineColor(parameters.colors[name]);
 		
 		if (counter == 0){
-			graph->SetTitle(canvasName.c_str());
-			graph->Draw("AL");
+			pad1->cd();
+			TH1F* hFrame1 = new TH1F("hFrame1", canvasName.c_str(), nbBins, xAxisMin, xAxisMax);
+			hFrame1->SetStats(0);
+			TAxis* xAxis = hFrame1->GetXaxis();
+			TAxis* yAxis = hFrame1->GetYaxis();
+			hFrame1->Draw("AXIS"); // Рисуем рамку первой
+			xAxis->SetLimits(xAxisMin, xAxisMax);
+			xAxis->SetRangeUser(xAxisMin, xAxisMax);
+			xAxis->SetLabelSize(0); 
+			xAxis->SetTitleSize(0);
+			xAxis->SetTickLength(0.03);
+			yAxis->SetRangeUser(yAxisMin, yAxisMax);
+			yAxis->ChangeLabelByValue(1e1, -1, -1, -1, -1, -1, " ");
+			yAxis->ChangeLabelByValue(1e2, -1, -1, -1, -1, -1, " ");
+			yAxis->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
+			yAxis->SetTitle("Range #rhor, [g cm^{-2}] ");
+			yAxis->SetTitleSize(0.04);
+			yAxis->SetTitleOffset(0.72);
+			yAxis->CenterTitle(true);
+			pad1->Update();
+
+			
 			graph->GetXaxis()->SetLimits(xAxisMin, xAxisMax);
 			graph->GetXaxis()->SetRangeUser(xAxisMin, xAxisMax);
 			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
 			graph->GetXaxis()->SetTitle("Energy, [MeV]");
-			graph->GetYaxis()->SetTitle("Range #rhor, [g cm^{-2}] ");
-			//graph->GetYaxis()->SetTitleSize(0.062);
-			//graph->GetYaxis()->SetTitleOffset(0.45);
 			graph->GetYaxis()->SetTitleSize(0.04);
 			graph->GetYaxis()->SetTitleOffset(0.72);
 			graph->GetXaxis()->CenterTitle(true);
 			graph->GetYaxis()->CenterTitle(true);
-			//graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
-			//graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
+			graph->Draw("L SAME");
+			pad1->RedrawAxis();
 
-			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО К ГРАНИЦЕ xAxisMax
 			TText* authorsText = new TText(xAxisMax, yAxisMax * 1.1, authors);
+			authorsText->SetNDC();
 			authorsText->SetTextAlign(31); 
 			authorsText->SetTextSize(authorsTextSize);
 			authorsText->SetTextFont(42);
-			authorsText->Draw();
+			authorsText->DrawText(0.895, 0.91, authors);
+
+			TLatex *texTitle = new TLatex(0.5, 0.955, canvasName.c_str());
+			texTitle->SetNDC();
+			texTitle->SetTextAlign(22); // Центр-Центр
+			texTitle->SetTextFont(42);
+			texTitle->SetTextSize(0.045);
+			texTitle->Draw();
 			
 		} else {
 			graph->Draw("L SAME");
@@ -206,13 +233,43 @@ void plotProtonRange()
 		/* Residuals Calculation */
 		pad2->cd();
 		double res[n];
-		double rmse = 0;
 		for (size_t i=0; i<n; i++){
 			double simVal = graph->Eval(xData[i]);
 			res[i] = (yData[i] - simVal) / yData[i];
-			rmse += TMath::Power(res[i], 2);
 		}
+
+		/* Chi2 calculations */
+		double chi2Sum = 0;
+		int validPoints = 0;
+		for (int i = 0; i < n; i++) {
+			double simVal = vecRange[i]; 
+			double energy = xData[i];
+			double errSim = vecSME[i];
+
+			// ICRU90 Error
+			double relErrExp = ey.back();
+			for (int j=0; j < x_err.size(); j++ ){
+				if (energy >= x_err[j]) relErrExp = ey[j];
+			}
+			
+			double errExp = relErrExp * yData[i];
+
+			// Остатки
+			res[i] = (yData[i] - simVal) / yData[i];
+
+			// Chi2
+			double totalVariance = TMath::Power(errSim, 2) + TMath::Power(errExp, 2);
+			if (totalVariance > 0) {
+				chi2Sum += TMath::Power(yData[i] - simVal, 2) / totalVariance;
+				validPoints++;
+			}
+		}
+		double rmse = 0;
+		for(int i=0; i<n; i++) rmse += res[i]*res[i];
 		rmse = TMath::Sqrt(rmse/n);
+
+		double normChi2 = (validPoints > 1) ? chi2Sum / (validPoints - 1) : 0;
+		std::cout << "Model: " << name << " | Reduced Chi2 = " << normChi2 << " | RMSE = " << rmse << std::endl;
 		
 		if (counter == 0){
 			hFrame->SetStats(0);
@@ -237,10 +294,6 @@ void plotProtonRange()
 			YaxisRes->SetLabelSize(0.06);
 			YaxisRes->CenterTitle(true);
 			
-			/*std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
-			std::vector<double> y_err = {0., 0., 0., 0., 0.};
-			std::vector<double> ex = {0., 0., 0., 0., 0.};
-			std::vector<double> ey = {0.05, 0.015, 0.01, 0.01, 0.01};
 			TGraphErrors* icruBand = new TGraphErrors(x_err.size(), &x_err[0], &y_err[0], nullptr, &ey[0]);
 			icruBand->SetFillColorAlpha(kGray, 0.5);
 			icruBand->SetFillStyle(1001);
@@ -264,14 +317,12 @@ void plotProtonRange()
 			yAxisBand->CenterTitle(true);
 			icruBand->SetTitle("");
 			//icruBand->GetXaxis()->SetMoreLogLabels();
-			icruBand->Draw("3"); */
-			/*legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");*/
+			icruBand->Draw("E3 SAME"); 
+			legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
-
-			
 
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
@@ -312,21 +363,7 @@ void plotProtonRange()
 		splineRes->SetLineWidth(lineWidth);
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
-
-		/*TGraphAsymmErrors* splineRes = new TGraphAsymmErrors(n);
-		for (int i=0; i<n; ++i){
-			double x = xData[i];
-			double y = res[i];
-			double rmse = vecRMSE[i];
-
-			splineRes->SetPoint(i, x, y);
-			splineRes->SetPointError(i, 0, 0, rmse, rmse);
-		}*/
-		splineRes->SetLineWidth(lineWidth);
-		splineRes->SetLineColor(parameters.colors[name]);
-		splineRes->Draw("L SAME");
-
-		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
+		legendRes->AddEntry(splineRes, Form("#bf{%s}  |   #bf{#chi^{2}} = %5.4f", name.c_str(), normChi2), "l");
 		legendRes->Draw();
 		
 		counter++;
@@ -345,18 +382,16 @@ void plotProtonRange()
 	for (int i=0; i < n; i++){
 		double x = xData[i];
 		double y = yData[i];
-		double relErr = 0.01;
-
-		if (x <= 0.01) relErr = 0.05;
-		else if (x <= 0.1) relErr = 0.015;
-		else relErr = 0.01;
+		double relErr = ey.back();
+		for (int i=0; i < ey.size(); i++ ){
+			if (x >= x_err[i]) relErr = ey[i];
+		}
 
 		graphExp->SetPoint(i, x, y);
 		graphExp->SetPointError(i, 0, 0, y*relErr, y*relErr);
 	}
 
 	graphExp->SetMarkerStyle(25);
-	//graphExp->SetMarkerStyle();
 	graphExp->SetMarkerSize(3);
 	graphExp->SetMarkerColor(kBlack);
 	graphExp->Draw("P E SAME");

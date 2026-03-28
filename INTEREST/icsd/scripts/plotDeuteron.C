@@ -5,6 +5,10 @@
 // This macro needs the output ROOT file
 // *********************************************************************
 
+#include <iomanip>
+#include <vector>
+#include <filesystem>
+
 void SetLeafAddress(TNtuple* ntuple, const char* name, void* address);
 
 namespace fs = std::filesystem;
@@ -66,22 +70,28 @@ void plotDeuteron()
 	parameters.legends["DNA8"] = Form("#bf{DNA Opt8}");
 	parameters.legends["Exp"]  = Form("#bf{%s}", dataAuthors.Data());
 	
-	/* Plotting parameters */
+	/* Global Axis & Legend Parameters (Стиль как в Range) */
 	double lineWidth = 1.5;
-	double yAxisMin = 1e-5;
-	double yAxisMax = 1;
-
-	// FIXED BINNING: Центрируем бины на целых числах
+	double yAxisMin = 3e-6;
+	double yAxisMax = 1.0;
 	double xAxisMin = -0.5;
-	double xAxisMax = 24.5; 
-	unsigned nbBins = 25; 
+	double xAxisMax = 21.5; 
+	unsigned nbBins = xAxisMax - xAxisMin; 
+	double totalNExp = 2.5e4;
+	double systemError = 0.05;
 
-	// Фиксированные координаты легенды
 	double xMinLeg = 0.7; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -100;
-	double yAxisResMax = 1.2;
+	double yAxisResMin = -8.5;
+	double yAxisResMax = 1.5;
 	double authorsTextSize = 0.0252;
+
+	double sumRelErrExp2 = 0;
+	for (int i = 0; i < n; i++) {
+		double relStat = TMath::Sqrt(yData[i] / totalNExp) / yData[i];
+		sumRelErrExp2 += TMath::Power(relStat, 2) + TMath::Power(systemError, 2);
+	}
+	double avgRelErrExp = TMath::Sqrt(sumRelErrExp2 / n);
 
 	/* Canvas initialization */
 	std::string canvasName = FormCanvasName(parameters.paths["DNA2"]);
@@ -117,45 +127,60 @@ void plotDeuteron()
 		double ion;
 		tree->SetBranchAddress("ionisations", &ion);
 	
-		/* Histogram and Graph with FIXED BINNING */
+		/* Histogram processing with Sumw2() */
 		TH1F* hist = new TH1F(Form("h_%s", name.c_str()), "", nbBins, xAxisMin, xAxisMax);
-		int nbPts = tree->GetEntries(); 
-		for (size_t i=0; i<nbPts; ++i){
+		hist->Sumw2();
+		int nbEntries = tree->GetEntries(); 
+		for (int i=0; i<nbEntries; ++i){
 			tree->GetEntry(i);
 			hist->Fill(ion);
 		}
 
 		double normFactor = hist->Integral();
-		TGraph* graph = new TGraph();
+		if(normFactor > 0) hist->Scale(1.0/normFactor);
+
+		/* Transfer to TGraphAsymmErrors (Стиль Range) */
+		TGraphAsymmErrors* graph = new TGraphAsymmErrors();
 		for (int j=1; j<=nbBins; ++j){
 			double center = hist->GetBinCenter(j);
 			double content = hist->GetBinContent(j);
-			if (content > 0) graph->SetPoint(graph->GetN(), center, content/normFactor);
+			double error = hist->GetBinError(j);
+			if (content > 0) {
+				int nPt = graph->GetN();
+				graph->SetPoint(nPt, center, content);
+				graph->SetPointError(nPt, 0, 0, error, error);
+			}
 		}
 		
 		graph->SetLineWidth(lineWidth);
 		graph->SetLineColor(parameters.colors[name]);
 		
 		if (counter == 0){
-			graph->SetTitle(canvasName.c_str());
 			graph->Draw("AL");
 			graph->GetXaxis()->SetLimits(0.0, xAxisMax);
 			graph->GetXaxis()->SetRangeUser(0.0, xAxisMax);
 			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
 			graph->GetXaxis()->SetTitle("Ionisation number");
 			graph->GetYaxis()->SetTitle("Frequency");
-			graph->GetYaxis()->SetTitleSize(0.062);
-			graph->GetYaxis()->SetTitleOffset(0.45);
+			graph->GetYaxis()->SetTitleSize(0.04);
+			graph->GetYaxis()->SetTitleOffset(0.72);
 			graph->GetXaxis()->CenterTitle(true);
 			graph->GetYaxis()->CenterTitle(true);
-			graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
 
-			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО К ГРАНИЦЕ xAxisMax
+			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО (как в Range)
 			TText* authorsText = new TText(xAxisMax, yAxisMax * 1.1, authors);
+			authorsText->SetNDC();
 			authorsText->SetTextAlign(31); 
 			authorsText->SetTextSize(authorsTextSize);
 			authorsText->SetTextFont(42);
-			authorsText->Draw();
+			authorsText->DrawText(0.895, 0.91, authors);
+
+			TLatex *texTitle = new TLatex(0.5, 0.955, (canvasName + "/u").c_str());
+			texTitle->SetNDC();
+			texTitle->SetTextAlign(22); // Центр-Центр
+			texTitle->SetTextFont(42);
+			texTitle->SetTextSize(0.045);
+			texTitle->Draw();
 		} else {
 			graph->Draw("L SAME");
 		};
@@ -178,10 +203,23 @@ void plotDeuteron()
 		double rmse = 0;
 		for (size_t i=0; i<n; i++){
 			double simVal = graph->Eval(xData[i]);
-			res[i] = (yData[i] - simVal) / yData[i];
+			res[i] = (yData[i] != 0) ? (yData[i] - simVal) / yData[i] : 0;
 			rmse += TMath::Power(res[i], 2);
 		}
 		rmse = TMath::Sqrt(rmse/n);
+
+		double chi2[n];	
+		double normChi2 = 0;
+		double totalNSim = (double)tree->GetEntries();
+		for (size_t i=0; i<n; ++i){
+			double simVal = graph->Eval(xData[i]);
+			chi2[i] = TMath::Power(yData[i] - simVal, 2)/
+						  (simVal/totalNSim +
+						   yData[i]/totalNExp +
+						   TMath::Power(systemError * yData[i], 2));
+			normChi2 += chi2[i];
+		}
+		normChi2 /= n - 1;
 		
 		if (counter == 0){
 			hFrame->SetStats(0);
@@ -192,19 +230,65 @@ void plotDeuteron()
 			XaxisRes->SetTitleSize(0.09);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			XaxisRes->ChangeLabelByValue(xAxisMax, -1, -1, -1, -1, -1, " ");
+			XaxisRes->SetTickSize(0.07);
+			XaxisRes->SetTitleOffset(1.2);
+			
+			// Скрываем метки под легендой
+			XaxisRes->ChangeLabelByValue(18, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(20, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(22, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(24, -1, -1, -1, -1, -1, " ");
 			
 			YaxisRes->SetRangeUser(yAxisResMin, yAxisResMax);
 			YaxisRes->SetTitle("#eta = [1 - Geant4/Exp]");
 			YaxisRes->SetTitleSize(0.07);
 			YaxisRes->SetTitleOffset(0.38);
-			YaxisRes->SetLabelSize(0.09);
-			YaxisRes->SetNdivisions(305);
+			YaxisRes->SetLabelSize(0.06);
 			YaxisRes->CenterTitle(true);
+			YaxisRes->SetNdivisions(503);
+
+			TGraphErrors* errCorridor = new TGraphErrors(n);
+			for (int i = 0; i < n; i++) {
+				double x = xData[i];
+				double y = yData[i];
+				
+				// Относительная погрешность (в долях единицы)
+				double relStatErr = TMath::Sqrt(y / totalNExp) / y;
+				double relSystErr = systemError;
+				double totalRelErr = TMath::Sqrt(relStatErr*relStatErr + relSystErr*relSystErr);
+				
+				errCorridor->SetPoint(i, x, 0.0); // Центрируем на нуле
+				errCorridor->SetPointError(i, 0.5, totalRelErr); 
+			}
+			errCorridor->SetFillColorAlpha(kGray, 0.4);
+			errCorridor->SetFillStyle(1001);
+			errCorridor->SetLineWidth(0);
+			errCorridor->Draw("E3 SAME");
+
+			//legendRes->AddEntry(errCorridor, Form("#bf{Exp.} | #bf{SystErr} = %1.0f%% | #bf{AvgErr} = %5.1f%%", systemError*100, avgRelErrExp * 100.0), "f");
+			legendRes->AddEntry(errCorridor, Form("#bf{Exp. tolerance}   |    #bf{AvgErr} = %4.1f%%", avgRelErrExp * 100.0), "f");
 
 			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
 			zeroLine->SetLineStyle(2);
-			zeroLine->Draw();
+			zeroLine->Draw("SAME");
+
+			// Верхняя ось для Pad 2
+			TGaxis *topAxisRes = new TGaxis(0.0, yAxisResMax, xAxisMax, yAxisResMax, 0.0, xAxisMax, 510, "-S");
+			topAxisRes->SetTickSize(0.07);
+			topAxisRes->SetLabelOffset(999);
+			topAxisRes->Draw("SAME");
+
+			// Правая ось для Pad 2 (Floating стиль)
+			double xRightAxisRes = 0.0 + (xMinLeg + 0.05) * (xAxisMax - 0.0);
+			TGaxis *rightAxisRes = new TGaxis(xRightAxisRes, yAxisResMin, xRightAxisRes, yAxisResMax, 
+											yAxisResMin, yAxisResMax, 
+											YaxisRes->GetNdivisions(), // Синхронизация меток
+											"+");
+			rightAxisRes->SetTickSize(0.03);
+			rightAxisRes->SetLabelOffset(999);
+			rightAxisRes->Draw("SAME");
+
+			pad2->RedrawAxis();
 		}
 		
 		TGraph* splineRes = new TGraph(n, xData, res);
@@ -212,7 +296,11 @@ void plotDeuteron()
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
 
-		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
+		//legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
+		//legendRes->SetTextFont(102); 
+		//legendRes->SetTextSize(0.0475);
+		//legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{#chi^{2}} = %5.2f | #bf{RMSRE} = %.1f%%", name.c_str(), normChi2, rmse*100), "l");
+		legendRes->AddEntry(splineRes, Form("#bf{%s}  |   #bf{#chi^{2}} = %5.2f", name.c_str(), normChi2), "l");
 		legendRes->Draw();
 		
 		counter++;
@@ -220,13 +308,25 @@ void plotDeuteron()
 	
 	/* Experimental data overlay */
 	pad1->cd();
-	TGraph* graphExp = new TGraph(n, xData, yData);
+	//TGraph* graphExp = new TGraph(n, xData, yData);
+	TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
+	for (int i=0; i < n; i++){
+		double x = xData[i];
+		double y = yData[i];
+		double statErr = TMath::Sqrt(y / totalNExp);
+    	double systErr = systemError * y;
+    	double totalErr = TMath::Sqrt(statErr*statErr + systErr*systErr);
+
+		graphExp->SetPoint(i, x, y);
+		graphExp->SetPointError(i, 0, 0, totalErr, totalErr);
+	}
 	graphExp->SetMarkerStyle(25);
 	graphExp->SetMarkerSize(3);
 	graphExp->SetMarkerColor(kBlack);
-	graphExp->Draw("P SAME");
-	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");
+	graphExp->Draw("P E SAME");
+
 	
+	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");
 	legend->Draw();
 	mainCanvas->Update();
 
@@ -236,6 +336,6 @@ void plotDeuteron()
 }
 
 const std::string FormCanvasName(std::string path){
-	if (path.find("deuteron") != std::string::npos) return "Ionisation Cluster Size Distribution of deuteron at energy E=16 MeV";
-	return "Ionisation Cluster Size Distribution";
+	if (path.find("deuteron") != std::string::npos) return "Ionisation cluster size distribution of deuteron at energy E=8 MeV";
+	return "Ionisation cluster size distribution";
 }

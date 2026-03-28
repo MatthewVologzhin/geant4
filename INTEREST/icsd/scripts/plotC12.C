@@ -5,8 +5,6 @@
 // This macro needs the output ROOT file
 // *********************************************************************
 
-void SetLeafAddress(TNtuple* ntuple, const char* name, void* address);
-
 namespace fs = std::filesystem;
 
 const std::string FormCanvasName(std::string);
@@ -36,8 +34,27 @@ void plotC12()
 	gStyle->SetPadBorderSize(0);																										  
 	
 	/* Experimental data: C12 (88 MeV) */	
-	const int n = 38;
+	//const int n = 38;
+	const int n = 44;
 	double xData[n] = {
+		0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 
+		11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 
+		21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 
+		31.0, 32.0, 33.0, 34.0, 35.0, 36.0, 37.0, 38.0, 39.0, 40.0, 
+		41.0, 42.0, 43.0
+	};
+	double yData[n] = {
+		0.003289923749530886, 0.0021183304023190317, 0.006841063094744774, 0.01617763686228951, 0.03138901052687994, 
+		0.04997019695567309, 0.06858002925725618, 0.08358469722108776, 0.09743652777991595, 0.10086941249600007, 
+		0.09840526900470375, 0.08825864292442193, 0.07876768958002653, 0.06591917736807791, 0.053553305429818975, 
+		0.04244432641776916, 0.033639756700918164, 0.025125075744544534, 0.018672983711724173, 0.013809306283308226, 
+		0.01031398652405151, 0.007295425408840068, 0.005315741491011481, 0.00385415390408607, 0.002766928032482954, 
+		0.0019283114343331853, 0.0014402300694805296, 0.0010390793533533885, 0.0006892007663730031, 0.0004947827637252583, 
+		0.0003047110355229469, 0.0002187544989061038, 0.00015549964936915778, 0.00010624682177860632, 0.00006943336851393132, 
+		0.000053421010922880685, 0.000030395848892651556, 0.00003508429456729003, 0.00002139390090322136, 0.000008194716609142006, 
+		0.000006242828673806147, 0.000002061477244897048, 0.000004181911545889677, 0.000003077403643435081
+	};
+	/*double xData[n] = {
 		1.031776335327308, 2.0109456535573376, 2.992321072504348, 3.975393492002885,
 		5.0422977387467665, 5.945102032158159, 6.931398752704597, 7.918034873361334,
 		8.987654320987657, 9.975648042085611, 10.963811463238725, 11.952314284502142,
@@ -60,12 +77,12 @@ void plotC12()
 		0.0005023783646072937, 0.00030516595595401813, 0.0002241379853142465, 0.0001569915540948596,
 		0.00010738109667130533, 0.00006839928255402965, 0.000053945939735468084, 0.00003124966462629795,
 		0.000035187770646174344, 0.000021374546404928186
-	};
+	};*/
 	
 	/* Parameters (Standard set: DNA Opt2, 4, 6, 8) */
 	Parameters parameters;
 	//parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8", "DNA2MI", "DNA8MI"};
-	parameters.names = {"DNA2", "DNA8", "DNA2MI", "DNA8MI"};
+	parameters.names = {"DNA2", "DNA4", "DNA6", "DNA8"};
 	parameters.paths["DNA2"]  = "root/ICSD_C12_88-MeV_DNA2.root";
 	parameters.paths["DNA4"]  = "root/ICSD_C12_88-MeV_DNA4.root";
 	parameters.paths["DNA6"]  = "root/ICSD_C12_88-MeV_DNA6.root";
@@ -92,17 +109,26 @@ void plotC12()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 1e-5;
-	double yAxisMax = 1;
+	double yAxisMin = 1e-6;
+	double yAxisMax = 1.;
 	double xAxisMin = -0.5;
-	double xAxisMax = 44.5; // Расширенный диапазон для C12
-	unsigned nbBins = 45; 
+	double xAxisMax = 50.5; // Расширенный диапазон для C12
+	unsigned nbBins = xAxisMax - xAxisMin; 
+	double totalNExp = 1e4;
+	double systemError = 0.05;
 
-	double xMinLeg = 0.7; 
+	double xMinLeg = 0.725; 
 	double xMaxLeg = 0.9;
-	double yAxisResMin = -1.2;
-	double yAxisResMax = 1.2;
+	double yAxisResMin = -1.5;
+	double yAxisResMax = 1.5;
 	double authorsTextSize = 0.0252;
+
+	double sumRelErrExp2 = 0;
+	for (int i = 0; i < n; i++) {
+		double relStat = TMath::Sqrt(yData[i] / totalNExp) / yData[i];
+		sumRelErrExp2 += TMath::Power(relStat, 2) + TMath::Power(systemError, 2);
+	}
+	double avgRelErrExp = TMath::Sqrt(sumRelErrExp2 / n);
 
 	/* Canvas initialization */
 	std::string canvasName = FormCanvasName(parameters.paths["DNA2"]);
@@ -121,12 +147,13 @@ void plotC12()
 	TAxis *XaxisRes = hFrame->GetXaxis();
 	TAxis *YaxisRes = hFrame->GetYaxis();
 	
-	TLegend *legend = new TLegend(xMinLeg, 0.55, xMaxLeg, 0.9);
-	legend->SetTextSize(0.045);
+	TLegend *legend = new TLegend(xMinLeg, 0.5, xMaxLeg, 0.9);
+	legend->SetTextSize(0.035);
 	legend->SetBorderSize(1); 
+	legend->SetEntrySeparation(0.5);
 	
-	TLegend *legendRes = new TLegend(xMinLeg, 0.3, xMaxLeg, 1);
-	legendRes->SetTextSize(0.05);
+	//TLegend *legendRes = new TLegend(xMinLeg, 0.3, xMaxLeg, 1);
+	//legendRes->SetTextSize(0.05);
 
 	int counter = 0;
 	for (auto name : parameters.names){
@@ -138,95 +165,177 @@ void plotC12()
 		double ion;
 		tree->SetBranchAddress("ionisations", &ion);
 	
-		/* Histogram and Graph with FIXED BINNING */
+		/* Histogram processing with Sumw2() */
 		TH1F* hist = new TH1F(Form("h_%s", name.c_str()), "", nbBins, xAxisMin, xAxisMax);
-		int nbPts = tree->GetEntries(); 
-		for (size_t i=0; i<nbPts; ++i){
+		hist->Sumw2();
+		int nbEntries = tree->GetEntries(); 
+		for (int i=0; i<nbEntries; ++i){
 			tree->GetEntry(i);
 			hist->Fill(ion);
 		}
 
 		double normFactor = hist->Integral();
-		TGraph* graph = new TGraph();
+		if(normFactor > 0) hist->Scale(1.0/normFactor);
+
+		/* Transfer to TGraphAsymmErrors (Стиль Range) */
+		TGraphAsymmErrors* graph = new TGraphAsymmErrors();
 		for (int j=1; j<=nbBins; ++j){
 			double center = hist->GetBinCenter(j);
 			double content = hist->GetBinContent(j);
-			if (content > 0) graph->SetPoint(graph->GetN(), center, content/normFactor);
+			double error = hist->GetBinError(j);
+			if (content > 0) {
+				int nPt = graph->GetN();
+				graph->SetPoint(nPt, center, content);
+				graph->SetPointError(nPt, 0, 0, error, error);
+			}
 		}
 		
 		graph->SetLineWidth(lineWidth);
-		graph->SetLineColor(parameters.colors[name]);
+		graph->SetLineColor(parameters.colors[name]);	
 		
 		if (counter == 0){
-			graph->SetTitle(canvasName.c_str());
-			graph->Draw("AL");
-			graph->GetXaxis()->SetLimits(0.0, xAxisMax);
-			graph->GetXaxis()->SetRangeUser(0.0, xAxisMax);
-			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
-			graph->GetXaxis()->SetTitle("Ionisation number");
-			graph->GetYaxis()->SetTitle("Frequency");
-			graph->GetYaxis()->SetTitleSize(0.062);
-			graph->GetYaxis()->SetTitleOffset(0.45);
-			graph->GetXaxis()->CenterTitle(true);
-			graph->GetYaxis()->CenterTitle(true);
-			graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
+			TH1F* hFrame1 = new TH1F("hFrame1", canvasName.c_str(), nbBins, xAxisMin, xAxisMax);
+			hFrame1->SetStats(0);
+			TAxis* xAxis = hFrame1->GetXaxis();
+			TAxis* yAxis = hFrame1->GetYaxis();
+			hFrame1->Draw("AXIS"); // Рисуем рамку первой
+			xAxis->SetLimits(xData[0], xData[n-1]);
+			xAxis->SetRangeUser(xData[0], xData[n-1]);
+			xAxis->SetLabelSize(0); 
+			xAxis->SetTitleSize(0);
+			xAxis->SetTickLength(0.03);
+			yAxis->SetRangeUser(yAxisMin, yAxisMax);
+			yAxis->ChangeLabelByValue(1, -1, -1, -1, -1, -1, "10^{0}");
+			yAxis->ChangeLabelByValue(1e-6, -1, -1, -1, -1, -1, " ");
+			yAxis->SetTitle("Frequency");
+			yAxis->SetTitleSize(0.07);
+			yAxis->SetTitleOffset(0.40);
+			yAxis->CenterTitle(true);
+			graph->Draw("L SAME");
+			pad1->Update();
+			pad1->RedrawAxis();
 
-			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО
+			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО (как в Range)
 			TText* authorsText = new TText(xAxisMax, yAxisMax * 1.1, authors);
+			authorsText->SetNDC();
 			authorsText->SetTextAlign(31); 
 			authorsText->SetTextSize(authorsTextSize);
 			authorsText->SetTextFont(42);
-			authorsText->Draw();
+			authorsText->DrawText(0.895, 0.91, authors);
+
+			TLatex *texTitle = new TLatex(0.5, 0.955, (canvasName + "/u").c_str());
+			texTitle->SetNDC();
+			texTitle->SetTextAlign(22); // Центр-Центр
+			texTitle->SetTextFont(42);
+			texTitle->SetTextSize(0.060);
+			texTitle->Draw();
 		} else {
 			graph->Draw("L SAME");
 		};
 		
+		double res[n];
+		double rmse = 0;
+		for (size_t i=0; i<n; i++){
+			double simVal = graph->Eval(xData[i]);
+			res[i] = (yData[i] != 0) ? (yData[i] - simVal) / yData[i] : 0;
+			rmse += TMath::Power(res[i], 2);
+		}
+		rmse = TMath::Sqrt(rmse/n);
+
+		double chi2[n];	
+		double normChi2 = 0;
+		double totalNSim = (double)tree->GetEntries();
+		for (size_t i=0; i<n; ++i){
+			double simVal = graph->Eval(xData[i]);
+			chi2[i] = TMath::Power(yData[i] - simVal, 2)/
+						  (simVal/totalNSim +
+						   yData[i]/totalNExp +
+						   TMath::Power(systemError * yData[i], 2));
+			normChi2 += chi2[i];
+		}
+		normChi2 /= n - 1;
+
 		/* Additional axes for Pad 1 */
-		TGaxis *topAxis = new TGaxis(0.0, yAxisMax, xAxisMax, yAxisMax, 0.0, xAxisMax, 510, "S-");
+		TGaxis *topAxis = new TGaxis(0.0, yAxisMax, xData[n-1], yAxisMax, 0.0, xData[n-1], 510, "S-");
 		topAxis->SetTickSize(0.07);
 		topAxis->SetTickLength(0.037);
 		topAxis->SetLabelOffset(999);
 		topAxis->Draw("SAME");
 		
-		TGaxis *rightAxis = new TGaxis(xAxisMax, yAxisMin, xAxisMax, yAxisMax, yAxisMin, yAxisMax, 510, "+GU");
+		TGaxis *rightAxis = new TGaxis(xData[n-1], yAxisMin, xData[n-1], yAxisMax, yAxisMin, yAxisMax, 510, "+GU");
 		rightAxis->Draw();
 	
-		legend->AddEntry(graph, parameters.legends[name], "l");
+		//legend->AddEntry(graph, parameters.legends[name], "l");
+		legend->AddEntry(graph, Form("#scale[0.9]{%s  |   #bf{#chi^{2}} = %5.2f}", parameters.legends[name].Data(), normChi2), "l");
 	
 		/* Residuals Calculation */
 		pad2->cd();
-		double res[n];
-		double rmse = 0;
-		for (size_t i=0; i<n; i++){
-			double simVal = graph->Eval(xData[i]);
-			res[i] = (yData[i] - simVal) / yData[i];
-			rmse += TMath::Power(res[i], 2);
-		}
-		rmse = TMath::Sqrt(rmse/n);
-		
 		if (counter == 0){
 			hFrame->SetStats(0);
 			hFrame->Draw("AXIS");
-			XaxisRes->SetLimits(0.0, xAxisMax);
-			XaxisRes->SetRangeUser(0.0, xAxisMax);
+			XaxisRes->SetLimits(xData[0], xData[n-1]);
+			XaxisRes->SetRangeUser(xData[0], xData[n-1]);
 			XaxisRes->SetTitle("Ionisation number");
-			XaxisRes->SetTitleSize(0.09);
+			XaxisRes->SetTitleSize(0.135);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			// Убираем лейбл на краю шкалы, если он мешает
-			XaxisRes->ChangeLabelByValue(45, -1, -1, -1, -1, -1, " ");
+			XaxisRes->SetTickSize(0.07);
+			XaxisRes->SetTitleOffset(0.88);
+			
+			// Скрываем метки под легендой
+			//XaxisRes->ChangeLabelByValue(40, -1, -1, -1, -1, -1, " ");
+			// XaxisRes->ChangeLabelByValue(50, -1, -1, -1, -1, -1, " ");
 			
 			YaxisRes->SetRangeUser(yAxisResMin, yAxisResMax);
 			YaxisRes->SetTitle("#eta = [1 - Geant4/Exp]");
-			YaxisRes->SetTitleSize(0.07);
-			YaxisRes->SetTitleOffset(0.38);
-			YaxisRes->SetLabelSize(0.09);
-			YaxisRes->SetNdivisions(305);
+			YaxisRes->SetTitleSize(0.085);
+			YaxisRes->SetTitleOffset(0.30);
+			YaxisRes->SetLabelSize(0.07);
 			YaxisRes->CenterTitle(true);
+			YaxisRes->SetNdivisions(305);
 
-			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
+			TGraphErrors* errCorridor = new TGraphErrors(n);
+			for (int i = 0; i < n; i++) {
+				double x = xData[i];
+				double y = yData[i];
+				
+				// Относительная погрешность (в долях единицы)
+				double relStatErr = TMath::Sqrt(y / totalNExp) / y;
+				double relSystErr = systemError;
+				double totalRelErr = TMath::Sqrt(relStatErr*relStatErr + relSystErr*relSystErr);
+				
+				errCorridor->SetPoint(i, x, 0.0); // Центрируем на нуле
+				errCorridor->SetPointError(i, 0.5, totalRelErr); 
+			}
+			errCorridor->SetFillColorAlpha(kGray, 0.4);
+			errCorridor->SetFillStyle(1001);
+			errCorridor->SetLineWidth(0);
+			errCorridor->Draw("E3 SAME");
+
+			//legendRes->AddEntry(errCorridor, Form("#bf{Exp.} | #bf{SystErr} = %1.0f%% | #bf{AvgErr} = %5.1f%%", systemError*100, avgRelErrExp * 100.0), "f");
+			//legendRes->AddEntry(errCorridor, Form("#bf{Exp. tolerance}   |    #bf{AvgErr} = %4.1f%%", avgRelErrExp * 100.0), "f");
+
+			TLine *zeroLine = new TLine(0.0, 0.0, xData[n-1], 0.0);
 			zeroLine->SetLineStyle(2);
-			zeroLine->Draw();
+			zeroLine->Draw("SAME");
+
+			// Верхняя ось для Pad 2
+			TGaxis *topAxisRes = new TGaxis(0.0, yAxisResMax, xData[n-1], yAxisResMax, 0.0, xData[n-1], 510, "-S");
+			topAxisRes->SetTickSize(0.07);
+			topAxisRes->SetLabelOffset(999);
+			topAxisRes->Draw("SAME");
+
+			// Правая ось для Pad 2 (Floating стиль)
+			//double xRightAxisRes = 0.0 + (xMinLeg + 0.05) * (xAxisMax - 0.0);
+			TGaxis *rightAxisRes = new TGaxis(xData[n-1], yAxisResMin, xData[n-1], yAxisResMax, 
+											yAxisResMin, yAxisResMax, 
+											YaxisRes->GetNdivisions(), // Синхронизация меток
+											"+");
+			rightAxisRes->SetTickSize(0.03);
+			rightAxisRes->SetLabelOffset(999);
+			rightAxisRes->Draw("SAME");
+
+			pad2->RedrawAxis();
 		}
 		
 		TGraph* splineRes = new TGraph(n, xData, res);
@@ -234,21 +343,37 @@ void plotC12()
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
 
-		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
-		legendRes->Draw();
+		//legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
+		//legendRes->SetTextFont(102); 
+		//legendRes->SetTextSize(0.0475);
+		//legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{#chi^{2}} = %5.2f | #bf{RMSRE} = %.1f%%", name.c_str(), normChi2, rmse*100), "l");
+		//legendRes->AddEntry(splineRes, Form("#bf{%s}  |   #bf{#chi^{2}} = %5.2f", name.c_str(), normChi2), "l");
+		//legendRes->Draw();
 		
 		counter++;
 	}
 	
 	/* Experimental data overlay */
 	pad1->cd();
-	TGraph* graphExp = new TGraph(n, xData, yData);
+	//TGraph* graphExp = new TGraph(n, xData, yData);
+	TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
+	for (int i=0; i < n; i++){
+		double x = xData[i];
+		double y = yData[i];
+		double statErr = TMath::Sqrt(y / totalNExp);
+    	double systErr = systemError * y;
+    	double totalErr = TMath::Sqrt(statErr*statErr + systErr*systErr);
+
+		graphExp->SetPoint(i, x, y);
+		graphExp->SetPointError(i, 0, 0, totalErr, totalErr);
+	}
 	graphExp->SetMarkerStyle(25);
 	graphExp->SetMarkerSize(3);
 	graphExp->SetMarkerColor(kBlack);
-	graphExp->Draw("P SAME");
-	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");
+	graphExp->Draw("P E SAME");
+
 	
+	legend->AddEntry(graphExp, Form("#scale[0.9]{%s}", parameters.legends["Exp"].Data()), "p");
 	legend->Draw();
 	mainCanvas->Update();
 
@@ -258,6 +383,6 @@ void plotC12()
 }
 
 const std::string FormCanvasName(std::string path){
-	if (path.find("C12") != std::string::npos) return "Ionisation Cluster Size Distribution of C12 at energy E=88 MeV";
-	return "Ionisation Cluster Size Distribution";
+	if (path.find("C12") != std::string::npos) return "Ionisation cluster size distribution of C12 at energy E=7.33 MeV";
+	return "Ionisation cluster size distribution";
 }

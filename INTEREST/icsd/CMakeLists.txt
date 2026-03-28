@@ -42,7 +42,7 @@ target_link_libraries(icsd ${Geant4_LIBRARIES} )
 # relies on these scripts being in the current working directory.
 #
 set(icsd_SCRIPTS
-    icsd.mac vis.mac plot.C
+    icsd.mac vis.mac plot.C run_geant4.sh run.sh submit.sub parameters.txt
   )
 
 file(COPY ${PROJECT_SOURCE_DIR}/macros DESTINATION ${PROJECT_BINARY_DIR})
@@ -50,6 +50,10 @@ file(COPY ${PROJECT_SOURCE_DIR}/scripts DESTINATION ${PROJECT_BINARY_DIR})
 
 file(COPY ${PROJECT_SOURCE_DIR}/icsd.mac DESTINATION ${PROJECT_BINARY_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/vis.mac DESTINATION ${PROJECT_BINARY_DIR})
+file(COPY ${PROJECT_SOURCE_DIR}/run_geant4.sh DESTINATION ${PROJECT_BINARY_DIR})
+file(COPY ${PROJECT_SOURCE_DIR}/run.sh DESTINATION ${PROJECT_BINARY_DIR})
+file(COPY ${PROJECT_SOURCE_DIR}/submit.sub DESTINATION ${PROJECT_BINARY_DIR})
+file(COPY ${PROJECT_SOURCE_DIR}/parameters.txt DESTINATION ${PROJECT_BINARY_DIR})
 
 #----------------------------------------------------------------------------
 # Install the executable to 'bin' directory under CMAKE_INSTALL_PREFIX

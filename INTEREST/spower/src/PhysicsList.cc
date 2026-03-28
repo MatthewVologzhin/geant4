@@ -149,7 +149,7 @@ void PhysicsList::AddPhysicsList(const G4String& name)
     delete fEmPhysicsList;
     fEmPhysicsList = new G4EmDNAPhysics_stationary_option6();
   } 
-  else if (name == "standard_opt4") {
+  else if (name == "std_opt4") {
     fEmName = name;
     delete fEmPhysicsList;
     fEmPhysicsList = new G4EmStandardPhysics_option4();

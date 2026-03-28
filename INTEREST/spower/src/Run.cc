@@ -146,7 +146,7 @@ void Run::EndOfRun()
           else if (physicsListName == "dna_opt4") physName = "DNA4";
           else if (physicsListName == "dna_opt6") physName = "DNA6";
           else if (physicsListName == "dna_opt8") physName = "DNA8";
-          else if (physicsListName == "standard_opt4") physName = "S4";
+          else if (physicsListName == "std_opt4") physName = "S4";
           else physName = "No_option";
       }
   }
@@ -165,7 +165,7 @@ void Run::EndOfRun()
   //remove(filename);
   FILE* myFile;
   myFile = fopen(filename, "a");
-  fprintf(myFile, "%e %e %e \n", fEkin / eV, fSP / (keV / um), rms / (keV / um));
+  fprintf(myFile, "%e %e %e %d\n", fEkin / eV, fSP / (keV / um), rms / (keV / um), numberOfEvent);
   fclose(myFile);
 
   // Reset default formats

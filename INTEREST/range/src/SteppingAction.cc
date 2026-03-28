@@ -38,6 +38,8 @@
 //
 
 #include "SteppingAction.hh"
+#include "G4Gamma.hh"
+#include "G4Electron.hh"
 
 #include "G4RunManager.hh"
 
@@ -54,8 +56,14 @@ SteppingAction::~SteppingAction() {}
 void SteppingAction::UserSteppingAction(const G4Step* aStep)
 {
   //*** WARNING: this will kill all secondary electrons ***
-
-  if (aStep->GetTrack()->GetDefinition()->GetPDGCharge() == -1
-      && aStep->GetTrack()->GetTrackID() != 1)
-    aStep->GetTrack()->SetTrackStatus(fStopAndKill);
+  G4Track* track = aStep->GetTrack();
+  G4double charge = track->GetDefinition()->GetPDGCharge();
+  if (track->GetDefinition() == G4Electron::Electron() || 
+      track->GetDefinition() == G4Gamma::Gamma()) {
+      track->SetTrackStatus(fStopAndKill);
+  }
+  //if (aStep->GetTrack()->GetDefinition()->GetPDGCharge() == -1
+  //    && aStep->GetTrack()->GetTrackID() != 1)
+  // aStep->GetTrack()->SetTrackStatus(fStopAndKill);
+  
 }

@@ -39,8 +39,10 @@ void plotAlpha()
 	gStyle->SetPadBorderSize(0);																										  
 	
 	/* Experimental data: electrons */	
-	const int n = 49;
-    double xData[n] = {
+	int n = 49;
+	int nuclons = 4;
+	const int maxEnergyU = 20; 
+    double xData[] = {
         0.0010, 0.0015, 0.0020, 0.0030, 0.0040, 0.0050, 0.0060, 0.0080, 0.0100,
         0.0150, 0.0200, 0.0300, 0.0400, 0.0500, 0.0600, 0.0800, 0.1000, 0.1500,
         0.2000, 0.3000, 0.4000, 0.5000, 0.6000, 0.8000, 1.0000, 1.5000, 2.0000,
@@ -48,7 +50,13 @@ void plotAlpha()
         40.0000, 50.0000, 60.0000, 80.0000, 100.0000, 150.0000, 200.0000, 300.0000,
         400.0000, 500.0000, 600.0000, 800.0000, 1000.0000
     };
-    double yData[n] = {
+	int maxIndex = 1;
+	for (double &x : xData){
+		x /= nuclons;
+		if (x == maxEnergyU) {n = maxIndex;}
+		++maxIndex;
+	}
+    double yData[] = {
     	9.981E+01, 1.228E+02, 1.431E+02, 1.776E+02, 2.069E+02, 2.330E+02, 2.568E+02,
 		2.993E+02, 3.370E+02, 4.181E+02, 4.871E+02, 6.039E+02, 7.030E+02, 7.905E+02, 
 		8.696E+02, 1.009E+03, 1.131E+03, 1.383E+03, 1.582E+03, 1.873E+03, 2.062E+03, 
@@ -86,26 +94,41 @@ void plotAlpha()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 1.0;   
-	double yAxisMax = 10000.0;
+	double yAxisMin = 7e1;   
+	double yAxisMax = 4e3;
 	double xAxisMin = 0.001;
-	double xAxisMax = 4641.5;
-	//double xAxisMax = 1000.0;
+	double xAxisMax = 1e5;
+	double systemError = 5e-2;
 	double nbBins = 1;
+	std::vector<double> x_err = {0.001/nuclons, 0.01/nuclons, 0.1/nuclons, 1.0/nuclons, 1000.0/nuclons};
+	std::vector<double> y_err = {0., 0., 0., 0., 0.};
+	std::vector<double> ex = {0., 0., 0., 0., 0.};
+	std::vector<double> ey = {0.15, 0.1, 0.06, 0.03, 0.03};
 
 	// Фиксированные координаты легенды NDC
-	double xMinLeg = 0.7; 
-	double xMaxLeg = 0.9;
-	double yAxisResMin = -0.2;
-	double yAxisResMax = 0.2;
+	double xMinLeg = 0.1; 
+	double xMaxLeg = 0.3;
+	double yAxisResMin = -0.23;
+	double yAxisResMax = 0.23;
 	double authorsTextSize = 0.0252;
+
+	// std::cout << TMath::Power(10., TMath::Log10(xAxisMin)+(xMaxLeg-0.1)/(xMinLeg-0.1)*(TMath::Log10(1e3) - TMath::Log10(xAxisMin))) << std::endl;
 
 	/* Canvas initialization */
 	std::string canvasName = FormCanvasName(parameters.paths["DNA2"], particleName);
 	TCanvas *mainCanvas = new TCanvas("mainCanvas", canvasName.c_str(), 1920, 1080);	
 	
     TPad *pad1 = new TPad("pad1", "main plot", 0.0, 0.3, 1.0, 1.0);
-    TPad *pad2 = new TPad("pad2", "residuals", 0.0, 0.0, 1.0, 0.3);
+    TPad *pad2 = new TPad("pad2", "residuals", -0.0, 0.0, 1.0, 0.3);
+
+	double leftMargin = 0.10;
+	double rightMargin = 0.10; // Фиксируем отступ справа
+
+	pad1->SetLeftMargin(leftMargin);
+	pad1->SetRightMargin(rightMargin);
+	pad2->SetLeftMargin(leftMargin);
+	pad2->SetRightMargin(rightMargin);
+
     pad1->SetLogx(); 
 	pad1->SetLogy();
     pad1->SetBottomMargin(0);
@@ -119,12 +142,13 @@ void plotAlpha()
 	TAxis *XaxisRes = hFrame->GetXaxis();
 	TAxis *YaxisRes = hFrame->GetYaxis();
 	
-	TLegend *legend = new TLegend(xMinLeg, 0.6, xMaxLeg, 0.9);
-	legend->SetTextSize(0.045);
+	TLegend *legend = new TLegend(xMinLeg, 0.5, xMaxLeg, 0.9);
+	legend->SetTextSize(0.035);
 	legend->SetBorderSize(1); 
+	legend->SetEntrySeparation(0.5);
 	
-	TLegend *legendRes = new TLegend(xMinLeg, 0.3, xMaxLeg, 1);
-	legendRes->SetTextSize(0.05);
+	//TLegend *legendRes = new TLegend(xMinLeg, 0.3, xMaxLeg, 1);
+	//legendRes->SetTextSize(0.05);
 
 	int counter = 0;
 	for (auto name : parameters.names){
@@ -134,11 +158,11 @@ void plotAlpha()
 		std::vector<double> vecEnergy, vecSP, vecRMSE;
 
 		double rho = 0.998;
-		double energyVar, spVar, rmseVar;
-		while (inputFile >> energyVar >> spVar >> rmseVar){
-			vecEnergy.push_back(energyVar*1e-6);
+		double energyVar, spVar, rmseVar, partNb;
+		while (inputFile >> energyVar >> spVar >> rmseVar >> partNb){
+			vecEnergy.push_back(energyVar*1e-6/nuclons);
 			vecSP.push_back(spVar*10/rho);
-			vecRMSE.push_back(rmseVar*10/rho);
+			vecRMSE.push_back(rmseVar*10/rho/TMath::Sqrt(partNb));
 		}
 		inputFile.close();
 		long long unsigned nSim = vecEnergy.size();
@@ -149,9 +173,7 @@ void plotAlpha()
 			double x = vecEnergy[i];
 			double y = vecSP[i];
 			double rmse = vecRMSE[i];
-
 			graph->SetPoint(i, x, y);
-
 			graph->SetPointError(i, 0, 0, rmse, rmse);
 		}
 
@@ -160,113 +182,132 @@ void plotAlpha()
 		graph->SetLineColor(parameters.colors[name]);
 		
 		if (counter == 0){
-			graph->SetTitle(canvasName.c_str());
-			graph->Draw("AL");
-			graph->GetXaxis()->SetLimits(xAxisMin, xAxisMax);
-			graph->GetXaxis()->SetRangeUser(xAxisMin, xAxisMax);
-			graph->GetYaxis()->SetRangeUser(yAxisMin, yAxisMax);
-			graph->GetXaxis()->SetTitle("Energy, [MeV]");
-			graph->GetYaxis()->SetTitle("Stopping power #frac{S_{el}}{#rho}, #left[#frac{MeV cm^{2}}{g}#right]");
-			//graph->GetYaxis()->SetTitleSize(0.062);
-			//graph->GetYaxis()->SetTitleOffset(0.45);
-			graph->GetYaxis()->SetTitleSize(0.04);
-			graph->GetYaxis()->SetTitleOffset(0.72);
-			graph->GetXaxis()->CenterTitle(true);
-			graph->GetYaxis()->CenterTitle(true);
-			graph->GetYaxis()->ChangeLabelByValue(1, -1, -1, -1, -1, -1, " ");
-			//graph->GetYaxis()->ChangeLabelByValue(1e-5, -1, -1, -1, -1, -1, " ");
+			pad1->cd();
+			TH1F* hFrame1 = new TH1F("hFrame1", canvasName.c_str(), nbBins, xAxisMin, xAxisMax);
+			hFrame1->SetStats(0);
+			TAxis* xAxis = hFrame1->GetXaxis();
+			TAxis* yAxis = hFrame1->GetYaxis();
+			hFrame1->Draw("AXIS"); // Рисуем рамку первой
+			xAxis->SetLimits(xData[0], xData[n-1]);
+			xAxis->SetRangeUser(xData[0], xData[n-1]);
+			xAxis->SetLabelSize(0); 
+			xAxis->SetTitleSize(0);
+			xAxis->SetTickLength(0.03);
+			yAxis->SetRangeUser(yAxisMin, yAxisMax);
+			yAxis->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
+			yAxis->SetTitle("Stopping power #frac{S_{el}}{#rho}, #left[#frac{MeV cm^{2}}{g}#right]");
+			yAxis->SetTitleSize(0.05);
+			yAxis->SetTitleOffset(0.55);
+			yAxis->CenterTitle(true);
+			pad1->Update();
+			pad1->RedrawAxis();
 
-			// ПРИЖИМАЕМ АВТОРОВ ВПРАВО К ГРАНИЦЕ xAxisMax
 			TText* authorsText = new TText(xAxisMax, yAxisMax * 1.1, authors);
+			authorsText->SetNDC();
 			authorsText->SetTextAlign(31); 
 			authorsText->SetTextSize(authorsTextSize);
 			authorsText->SetTextFont(42);
-			authorsText->Draw();
+			authorsText->DrawText(0.895, 0.91, authors);
+
+			TLatex *texTitle = new TLatex(0.5, 0.955, canvasName.c_str());
+			texTitle->SetNDC();
+			texTitle->SetTextAlign(22); // Центр-Центр
+			texTitle->SetTextFont(42);
+			texTitle->SetTextSize(0.060);
+			texTitle->Draw();
 			
 		} else {
 			graph->Draw("L SAME");
 		};
-		
+
 		/* Additional axes for Pad 1 */
-		TGaxis *topAxis = new TGaxis(0.0, yAxisMax, xAxisMax, yAxisMax, 0.0, xAxisMax, 510, "S-");
+		TGaxis *topAxis = new TGaxis(xData[0], yAxisMax, xData[n-1], yAxisMax, xData[0], xData[n-1], 510, "GS-");
 		topAxis->SetTickSize(0.07);
 		topAxis->SetTickLength(0.037);
 		topAxis->SetLabelOffset(999);
 		topAxis->Draw("SAME");
 		
-		TGaxis *rightAxis = new TGaxis(xAxisMax, yAxisMin, xAxisMax, yAxisMax, yAxisMin, yAxisMax, 510, "+GU");
+		TGaxis *rightAxis = new TGaxis(xData[n-1], yAxisMin, xData[n-1], yAxisMax, yAxisMin, yAxisMax, 510, "+GU");
 		rightAxis->Draw();
-		legend->AddEntry(graph, parameters.legends[name], "l");
-	
+
 		/* Residuals Calculation */
 		pad2->cd();
 		double res[n];
-		double rmse = 0;
 		for (size_t i=0; i<n; i++){
 			double simVal = graph->Eval(xData[i]);
 			res[i] = (yData[i] - simVal) / yData[i];
-			rmse += TMath::Power(res[i], 2);
 		}
+
+		/* Chi2 calculations */
+		double chi2Sum = 0;
+		int validPoints = 0;
+		for (int i = 0; i < n; i++) {
+			double simVal = vecSP[i]; 
+			double energy = xData[i];
+			double errSim = vecRMSE[i];
+
+			// ICRU90 Error
+			double relErrExp = ey.back();
+			for (int j=0; j < x_err.size(); j++ ){
+				if (energy >= x_err[j]) relErrExp = ey[j];
+			}
+			
+			double errExp = relErrExp * yData[i];
+
+			// Остатки
+			res[i] = (yData[i] - simVal) / yData[i];
+
+			// Chi2
+			double totalVariance = TMath::Power(errSim, 2) + TMath::Power(errExp, 2);
+			if (totalVariance > 0) {
+				chi2Sum += TMath::Power(yData[i] - simVal, 2) / totalVariance;
+				validPoints++;
+			}
+		}
+		double rmse = 0;
+		for(int i=0; i<n; i++) rmse += res[i]*res[i];
 		rmse = TMath::Sqrt(rmse/n);
+
+		double normChi2 = (validPoints > 1) ? chi2Sum / (validPoints - 1) : 0;
+		std::cout << "Model: " << name << " | Reduced Chi2 = " << normChi2 << " | RMSE = " << rmse << std::endl;
+		
+		legend->AddEntry(graph, Form("#scale[0.9]{%s  |   #bf{#chi^{2}} = %5.2f}", parameters.legends[name].Data(), normChi2), "l");
 		
 		if (counter == 0){
 			hFrame->SetStats(0);
 			hFrame->Draw("AXIS");
-
-			XaxisRes->SetLimits(xAxisMin, xAxisMax);
-			XaxisRes->SetRangeUser(xAxisMin, xAxisMax);
-			XaxisRes->SetTitle("Energy, [MeV]");
-			XaxisRes->SetTitleSize(0.09);
+			XaxisRes->SetLimits(xData[0], xData[n-1]);
+			XaxisRes->SetRangeUser(xData[0], xData[n-1]);
+			XaxisRes->SetTitle("Energy, [MeV/u]");
+			XaxisRes->SetTitleSize(0.135);
 			XaxisRes->SetLabelSize(0.09);
 			XaxisRes->CenterTitle(true);
-			XaxisRes->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
-			XaxisRes->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
 			XaxisRes->SetTickSize(0.07);
-			XaxisRes->SetTitleOffset(1.2);
+			XaxisRes->SetTitleOffset(0.88);
+			XaxisRes->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
+			XaxisRes->ChangeLabelByValue(1e5, -1, -1, -1, -1, -1, " ");
 		
-			YaxisRes->SetLimits(yAxisResMin, yAxisResMax);
 			YaxisRes->SetRangeUser(yAxisResMin, yAxisResMax);
 			YaxisRes->SetTitle("#eta = [1 - Geant4/Exp]");
-			YaxisRes->SetTitleSize(0.07);
-			YaxisRes->SetTitleOffset(0.38);
-			YaxisRes->SetLabelSize(0.06);
+			YaxisRes->SetTitleSize(0.085);
+			YaxisRes->SetTitleOffset(0.30);
+			YaxisRes->SetLabelSize(0.07);
 			YaxisRes->CenterTitle(true);
+			YaxisRes->SetNdivisions(305);
 			
-			std::vector<double> x_err = {0.001, 0.01, 0.1, 1.0, 1000.0};
-			std::vector<double> y_err = {0., 0., 0., 0., 0.};
-			std::vector<double> ex = {0., 0., 0., 0., 0.};
-			std::vector<double> ey = {0.15, 0.1, 0.06, 0.03, 0.03};
 			TGraphErrors* icruBand = new TGraphErrors(x_err.size(), &x_err[0], &y_err[0], nullptr, &ey[0]);
 			icruBand->SetFillColorAlpha(kGray, 0.5);
 			icruBand->SetFillStyle(1001);
 			icruBand->SetLineColor(kGray);
-			icruBand->SetLineWidth(0);
-			TAxis* xAxisBand = icruBand->GetXaxis();
-			TAxis* yAxisBand = icruBand->GetYaxis();
-			xAxisBand->SetLimits(xAxisMin, xAxisMax);
-			xAxisBand->SetRange(xAxisMin, xAxisMax);
-			xAxisBand->SetTitle("Energy, [MeV]");
-			xAxisBand->ChangeLabelByValue(1e3, -1, -1, -1, -1, -1, " ");
-			xAxisBand->ChangeLabelByValue(1e4, -1, -1, -1, -1, -1, " ");
-			xAxisBand->SetTitleSize(0.09);
-			xAxisBand->SetLabelSize(0.09);
-			xAxisBand->SetTitleOffset(1.2);
-			xAxisBand->CenterTitle(true);
-			yAxisBand->SetTitle("#eta = [1 - Geant4/Exp]");
-			yAxisBand->SetTitleSize(0.07);
-			yAxisBand->SetLabelSize(0.06);
-			yAxisBand->SetTitleOffset(0.38);
-			yAxisBand->CenterTitle(true);
-			icruBand->SetTitle("");
-			//icruBand->GetXaxis()->SetMoreLogLabels();
-			icruBand->Draw("3"); 
+			icruBand->SetLineWidth(0);;
+			icruBand->Draw("E3 SAME"); 
+			//legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
 
-			TLine *zeroLine = new TLine(0.0, 0.0, xAxisMax, 0.0);
+			TLine *zeroLine = new TLine(0.0, 0.0, xData[n-1], 0.0);
 			zeroLine->SetLineStyle(2);
 			zeroLine->Draw("SAME");
 
-			legendRes->AddEntry(icruBand, "#bf{ICRU90 Relative error}", "f");
-
+			// Верхняя ось для Pad 2
 			TString chopt = "SN-G";
 			int numDecadesForTGaxis = 0;
 			if (xAxisMin > 0 && xAxisMax > xAxisMin) {
@@ -276,19 +317,19 @@ void plotAlpha()
 				std::cerr << "Warning: Invalid X axis range for calculating decades for TGaxis. Using default." << std::endl;
 				numDecadesForTGaxis = 3;
 			}
-			TGaxis *topAxisRes = new TGaxis(xAxisMin, yAxisResMax, xAxisMax, yAxisResMax,
-									xAxisMin, xAxisMax,
+			TGaxis *topAxisRes = new TGaxis(xData[0], yAxisResMax, xData[n-1], yAxisResMax,
+									xData[0], xData[n-1],
 									numDecadesForTGaxis,
 									chopt.Data());
 			topAxisRes->SetTickSize(0.07);
 			topAxisRes->SetLineColor(kBlack);
 			topAxisRes->SetLineWidth(1);
 			topAxisRes->Draw("SAME A");
-			
+
 			chopt = "+"; 
 			numDecadesForTGaxis = 305;
 			double xRightAxisRes = TMath::Power(10, log10(xAxisMin)+(xMinLeg+0.05)*(log10(xAxisMax)-log10(xAxisMin)));
-			TGaxis *rightAxisRes = new TGaxis(xRightAxisRes, yAxisResMin, xRightAxisRes, yAxisResMax,
+			TGaxis *rightAxisRes = new TGaxis(xData[n-1], yAxisResMin, xData[n-1], yAxisResMax,
 											yAxisResMin, yAxisResMax,
 											YaxisRes->GetNdivisions(),
 											chopt.Data());
@@ -298,7 +339,6 @@ void plotAlpha()
 			rightAxisRes->SetLabelOffset(999);
 			rightAxisRes->Draw("SAME");
 
-
 			pad2->RedrawAxis();
 		}
 		
@@ -306,56 +346,34 @@ void plotAlpha()
 		splineRes->SetLineWidth(lineWidth);
 		splineRes->SetLineColor(parameters.colors[name]);
 		splineRes->Draw("L SAME");
-
-		/*TGraphAsymmErrors* splineRes = new TGraphAsymmErrors(n);
-		for (int i=0; i<n; ++i){
-			double x = xData[i];
-			double y = res[i];
-			double rmse = vecRMSE[i];
-
-			splineRes->SetPoint(i, x, y);
-			splineRes->SetPointError(i, 0, 0, rmse, rmse);
-		}*/
-		splineRes->SetLineWidth(lineWidth);
-		splineRes->SetLineColor(parameters.colors[name]);
-		splineRes->Draw("L SAME");
-
-		legendRes->AddEntry(splineRes, Form("#bf{%s} | #bf{RMSE} = %.4f", name.c_str(), rmse), "l");
-		legendRes->Draw();
+		//legendRes->AddEntry(splineRes, Form("#bf{%s}  |   #bf{#chi^{2}} = %5.4f", name.c_str(), normChi2), "l");
+		//legendRes->Draw();
 		
 		counter++;
 	}
 	
-	/* Experimental data overlay */
+	/* Experimental data overlaxDy */
 	pad1->cd();
-	/*TGraph* graphExp = new TGraph(n, xData, yData);
-	graphExp->SetMarkerStyle(25);
-	graphExp->SetMarkerSize(3);
-	graphExp->SetMarkerColor(kBlack);
-	graphExp->Draw("P SAME");
-	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");*/
-
 	TGraphAsymmErrors* graphExp = new TGraphAsymmErrors(n);
 	for (int i=0; i < n; i++){
 		double x = xData[i];
 		double y = yData[i];
-		double relErr = 0.01;
-
-		if (x <= 0.01) relErr = 0.05;
-		else if (x <= 0.1) relErr = 0.015;
-		else relErr = 0.01;
+		double relErr = ey.back();
+		for (int i=0; i < ey.size(); i++ ){
+			if (x >= x_err[i]) relErr = ey[i];
+		}
 
 		graphExp->SetPoint(i, x, y);
 		graphExp->SetPointError(i, 0, 0, y*relErr, y*relErr);
 	}
 
 	graphExp->SetMarkerStyle(25);
-	//graphExp->SetMarkerStyle();
 	graphExp->SetMarkerSize(3);
 	graphExp->SetMarkerColor(kBlack);
 	graphExp->Draw("P E SAME");
-	legend->AddEntry(graphExp, parameters.legends["Exp"], "p");
-	
+
+	legend->AddEntry(graphExp, Form("#scale[0.9]{%s}",
+								    parameters.legends["Exp"].Data()), "p");
 	legend->Draw();
 	mainCanvas->Update();
 
@@ -365,6 +383,6 @@ void plotAlpha()
 }
 
 const std::string FormCanvasName(std::string path, const std::string particleName){
-	if (path.find(particleName) != std::string::npos) return "Electronic Stopping power for " + particleName;
-	return "Electronic Stopping power";
+	if (path.find(particleName) != std::string::npos) return "Electronic stopping power for " + particleName;
+	return "Electronic stopping power";
 }
