@@ -21,11 +21,8 @@ Self-Education/*
 !Internships/INTEREST_13/
 !Internships/INTEREST_14/
 !Internships/START/
-!Self-Education/dnaalpha_project/ionradial/
-!Self-Education/dnaalpha_project/ionranges/
-!Self-Education/dnaalpha_project/learn_root/
-!Self-Education/dnaalpha_project/tomography_project/
-!Self-Education/dnaalpha_project/dnaalpha_project/
+!Self-Education/learn_root/
+!Self-Education/tomography_project/
 
 # 7. Глобальный фильтр мусора (применяется ко всем разрешенным проектам)
 **/build/
