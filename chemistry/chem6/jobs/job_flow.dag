@@ -1,0 +1,8 @@
+# jobs/job_flow.dag
+JOB  CALC   jobs/geant4.sub
+JOB  MERGE  jobs/merge.sub
+JOB  PLOT   jobs/plot.sub
+
+PARENT CALC CHILD MERGE
+PARENT MERGE CHILD PLOT
+RETRY CALC 2

@@ -1,0 +1,7 @@
+# jobs/plot.sub
+universe   = local
+executable = scripts/run_plot.sh
+log        = results/logs/plot.log
+output     = results/logs/plot.out
+error      = results/logs/plot.err
+queue

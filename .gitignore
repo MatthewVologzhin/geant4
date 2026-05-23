@@ -1,29 +1,33 @@
-# 1. Игнорируем абсолютно всё в папке projects
+# 1. Игнорируем абсолютно всё в корне репозитория
 /*
 
-# 2. Исключения: файлы самого гита и описания
+# 2. Исключения для важных файлов в корне
 !.gitignore
 !README.md
 
-# 3. Разрешаем заходить в START, но игнорируем там всё
-!START/
+# 3. Разрешаем Git заходить в папки-контейнеры
+!chemistry/
+!icsd_pdb/
+!Internships/
+!Self-Education/
 
-# 4. Разрешаем конкретные проекты внутри START (добавь свои)
+# 4. Игнорируем всё содержимое внутри этих папок по умолчанию
+chemistry/*
+Internships/*
+Self-Education/*
 
+# 5. Разрешаем конкретные проекты (подпапки)
+!chemistry/chem6/
+!Internships/INTEREST_13/
+!Internships/INTEREST_14/
+!Internships/START/
+!Self-Education/dnaalpha_project/ionradial/
+!Self-Education/dnaalpha_project/ionranges/
+!Self-Education/dnaalpha_project/learn_root/
+!Self-Education/dnaalpha_project/tomography_project/
+!Self-Education/dnaalpha_project/dnaalpha_project/
 
-# 5. Разрешаем заходить в INTEREST, но игнорируем там всё
-!INTEREST/
-INTEREST/*
-!START/
-START/*
-
-# 6. Разрешаем конкретные проекты внутри INTEREST
-!INTEREST/icsd/
-!INTEREST/range/
-!INTEREST/spower/
-!START/ionradial
-
-# 7. Глобальный фильтр мусора (Geant4, VS Code, системы)
+# 7. Глобальный фильтр мусора (применяется ко всем разрешенным проектам)
 **/build/
 **/bin/
 **/*.root
@@ -31,3 +35,13 @@ START/*
 **/*.pdf
 **/.vscode/
 **/.DS_Store
+**/results/
+**/*.log
+**/*.err
+**/*.out
+!**/parameters.txt
+
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.pyc

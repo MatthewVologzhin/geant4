@@ -1,0 +1,7 @@
+# jobs/merge.sub
+universe   = local
+executable = scripts/run_merge.sh
+log        = results/logs/merge.log
+output     = results/logs/merge.out
+error      = results/logs/merge.err
+queue

@@ -1,0 +1,37 @@
+# ------------------------------------------------------------
+# 1. Universe and executable
+# ------------------------------------------------------------
+universe = vanilla
+executable = run_geant4.sh
+
+# ------------------------------------------------------------
+# 2. Logging
+# ------------------------------------------------------------
+log =       logs/job_$(Cluster)_$(Process).log
+output =    logs/job_$(Cluster)_$(Process).out
+error =     logs/job_$(Cluster)_$(Process).err
+
+# ------------------------------------------------------------
+# 3. Arguments (make sure the script expects these)
+# ------------------------------------------------------------
+arguments = "$(physics) $(chemistry) $(chemistry_method) $(mi) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
+
+# ------------------------------------------------------------
+# 4. Resources
+# ------------------------------------------------------------
+request_cpus = $(cpus)
+request_memory = $(memory)
+request_disk = $(disk)
+
+# ------------------------------------------------------------
+# 5. Input/Output files to transfer
+# ------------------------------------------------------------
+transfer_input_files = chem6
+transfer_output_files = output/
+when_to_transfer_output = ON_EXIT
+should_transfer_files = YES
+
+# ------------------------------------------------------------
+# 8. Queue definition
+# ------------------------------------------------------------
+queue physics, chemistry, chemistry_method, mi, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, cpus, memory, disk from parameters.txt

@@ -1,0 +1,71 @@
+/run/numberOfThreads 8
+
+/chem/phys/registerPhysics G4EmDNAPhysics_option8
+/chem/phys/PhysChemVerbose 1
+/process/dna/e-SolvationSubType Meesungnoen2002
+#/process/dna/e-SolvationSubType Ritchie1994
+#/process/dna/e-SolvationSubType Terrisol1990
+
+# use Step-by-Step (SBS), independent reaction time (IRT)
+# or synchronized IRT (IRT_syn),
+# SBS ( is only for TDC, set 0 )
+/process/chem/TimeStepModel IRT
+#/process/chem/TimeStepModel SBS
+#/process/chem/TimeStepModel IRT_syn
+
+/chem/species OHr  [ OHr  |  0 | 2.2e-09 | 0.22 ]
+/chem/species Or   [ Or   |  0 | 2.0e-09 | 0.20 ]
+/chem/species HO2r [ HO2r |  0 | 2.3e-09 | 0.21 ]
+/chem/species O2r  [ O2r  |  0 | 2.4e-09 | 0.17 ]
+/chem/species Hr   [ Hr   |  0 | 7.0e-09 | 0.19 ]
+/chem/species H2O2r [ H2O2r | 0 | 2.3e-09 | 0.21 ]
+/chem/species e_aqr [ e_aqr | -1 | 4.9e-09 | 0.50 ]
+/chem/species OHmr  [ OHmr  | -1 | 5.3e-09 | 0.33 ]
+/chem/species H3Opr [ H3Opr |  1 | 9.46e-09| 0.25 ]
+/chem/species H2Or  [ H2Or  |  0 | 0.0     | 0.275]
+
+/run/initialize
+
+# Р РµР°РєС†РёРё РјСѓР»СЊС‚РёРёРѕРЅРёР·Р°С†РёРё (РёСЃРїРѕР»СЊР·СѓРµРј РќРђРЁР С‡РёСЃС‚С‹Рµ РёРјРµРЅР°)
+/chem/reaction/add OHr + Or -> HO2r             | Fix | 2.02e10 | 1
+/chem/reaction/add Or + Or -> O2r               | Fix | 2.2e10  | 1
+/chem/reaction/add HO2r + Or -> O2r + OHr       | Fix | 2.02e10 | 1
+
+# РЎС‚Р°РЅРґР°СЂС‚РЅС‹Рµ СЂРµР°РєС†РёРё (С‡РµСЂРµР· РЅР°С€Рё С‡РёСЃС‚С‹Рµ РёРјРµРЅР°)
+/chem/reaction/add OHr + Hr -> H2Or             | Fix | 1.55e10 | 1
+/chem/reaction/add OHr + OHr -> H2O2r           | Fix | 0.55e10 | 1
+/chem/reaction/add e_aqr + OHr -> OHmr          | Fix | 2.95e10 | 1
+/chem/reaction/add e_aqr + H2O2r -> OHmr + OHr  | Fix | 1.10e10 | 1
+/chem/reaction/add e_aqr + H3Opr -> Hr + H2Or   | Fix | 2.11e10 | 1
+
+/chem/PrintSpeciesTable
+
+/primaryKiller/setSize 5 5 5 um
+/gun/position  0 0 -2.5 um
+/gun/direction 0 0 1
+/gun/particle proton
+
+# in order to reproduce LET values of NIST data
+# please see the spower example using stationary mode
+
+# select cutoff energy for restricted LET
+#/scorer/LET/cutoff 100 eV
+
+#/scorer/species/addTimeToRecord 1 ps
+#/scorer/species/addTimeToRecord 10 ps
+#/scorer/species/addTimeToRecord 100 ps        
+#/scorer/species/addTimeToRecord 1 ns       
+#/scorer/species/addTimeToRecord 10 ns       
+#/scorer/species/addTimeToRecord 100 ns
+#/scorer/species/addTimeToRecord 1 us
+
+/scorer/species/nOfTimeBins 50
+
+/tracking/verbose 0
+/scheduler/verbose 0
+/scheduler/endTime 1 microsecond
+
+/run/printProgress 10
+
+/gun/energy 500 keV
+/run/beamOn 8
