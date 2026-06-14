@@ -39,6 +39,7 @@
 #include "G4LogicalVolumeStore.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4Tubs.hh"
+#include "G4Box.hh"
 #include "G4Orb.hh"
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
@@ -64,7 +65,7 @@ PrimaryGeneratorAction::~PrimaryGeneratorAction()
 
 void PrimaryGeneratorAction::GeneratePrimaries(G4Event* anEvent)
 {
-  auto* targetLogical = G4LogicalVolumeStore::GetInstance()->GetVolume("Target");
+  auto* targetLogical = G4LogicalVolumeStore::GetInstance()->GetVolume("World");
   if (!targetLogical) {
       G4Exception("PrimaryGenerator", "001", FatalException, "Target volume not found!");
   }
@@ -75,9 +76,11 @@ void PrimaryGeneratorAction::GeneratePrimaries(G4Event* anEvent)
       radius = orb->GetRadius();
   } else if (auto* tubs = dynamic_cast<G4Tubs*>(targetSolid)) {
       radius = tubs->GetOuterRadius();
+  } else if (auto* box = dynamic_cast<G4Box*>(targetSolid)) {
+      radius = box->GetXHalfLength();
   }
-
-  G4double xStart = -(radius + 15.0*nm); 
+  
+  G4double xStart = -radius + 0.1*nm; 
   fpParticleGun->SetParticlePosition(G4ThreeVector(xStart, 0., 0.));
   fpParticleGun->SetParticleMomentumDirection(G4ThreeVector(1., 0., 0.));
   fpParticleGun->GeneratePrimaryVertex(anEvent);

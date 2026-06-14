@@ -9,10 +9,15 @@
 #include "G4LogicalVolume.hh"
 #include "G4PVPlacement.hh"
 #include "G4VisAttributes.hh"
-#include "G4MultiUnion.hh"
 #include "G4Tokenizer.hh"
+#include "G4StateManager.hh"
 
 #include <fstream>
+
+struct AtomData {
+    G4ThreeVector pos;
+    G4double radius;
+};
 
 DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
 {
@@ -22,6 +27,7 @@ DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
   fOuterRadius = 1.15 * nm;
   fWaterDensity = 1. * g/cm3;
   fEfficiency = 1.0;
+  fVoxelSize = 5. * angstrom; 
   fGeomType = "PTB";
   fDetectorMessenger = new DetectorMessenger(this);
   LoadRadii();
@@ -31,64 +37,67 @@ void DetectorConstruction::DefineMaterials()
 {
   G4NistManager* man = G4NistManager::Instance();
   fpWorldMaterial = man->FindOrBuildMaterial("G4_WATER");
-
-  // Создаем уникальное имя на основе плотности
-  std::string densityStr = std::to_string(fWaterDensity / (g/cm3));
-  G4String matName = "G4_WATER_" + densityStr;
-
-  // Проверяем, существует ли уже материал с таким именем/плотностью
-  fpWaterMaterial = G4Material::GetMaterial(matName, false);
-
-  if (!fpWaterMaterial) {
-    // Если это стандартная вода 1.0 г/см3, можно взять из NIST
-    if (std::abs(fWaterDensity - 1.0 * g/cm3) < 1e-4 * g/cm3) {
-      fpWaterMaterial = man->FindOrBuildMaterial("G4_WATER");
-    } else {
-      // Создаем модифицированную воду с уникальным именем
-      fpWaterMaterial = new G4Material(matName, fWaterDensity, 2);
-      fpWaterMaterial->AddElement(man->FindOrBuildElement("H"), 2);
-      fpWaterMaterial->AddElement(man->FindOrBuildElement("O"), 1);
+  
+  if (std::abs(fWaterDensity - 1.0 * g/cm3) > 1e-4 * g/cm3) {
+    G4String matName = "G4_WATER_DENSE_" + std::to_string(fWaterDensity / (g/cm3));  
+    fpWaterMaterial = G4Material::GetMaterial(matName, false);
+    if (!fpWaterMaterial) {
+      fpWaterMaterial = man->BuildMaterialWithNewDensity(matName, "G4_WATER", fWaterDensity);
     }
+  } else {
+    fpWaterMaterial = fpWorldMaterial;
   }
 }
 
 DetectorConstruction::~DetectorConstruction()
 {
   delete fDetectorMessenger;
-  // Очистка fpVisTarget удалена, так как визуализация теперь локальная
 }
 
 void DetectorConstruction::SetDiameter(G4double val)
 {
   fOuterRadius = val/2;
-  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+void DetectorConstruction::SetVoxelSize(G4double val)
+{
+  fVoxelSize = val/2;
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
 }
 
 void DetectorConstruction::SetHeight(G4double val)
 {
   fHeight = val;
-  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
 }
 
 void DetectorConstruction::SetEfficiency(G4double val)
 {
   fEfficiency = val;
-  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
 }
 
 void DetectorConstruction::SetDensity(G4double val)
 {
   fWaterDensity = val;
-  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
 }
 
 void DetectorConstruction::LoadRadii()
 {
-    // Данные взяты из Table 1 статьи: 
     // Alvarez, S. (2013). A cartography of the van der Waals territories. 
     // Dalton Transactions, 42(24), 8617-8636.
-
-    // Основные элементы (Органика и ДНК)
     fRadiiMap["H"]  = 1.20 * angstrom;
     fRadiiMap["HE"] = 1.43 * angstrom;
     fRadiiMap["LI"] = 2.12 * angstrom;
@@ -113,7 +122,6 @@ void DetectorConstruction::LoadRadii()
     fRadiiMap["K"]  = 2.73 * angstrom;
     fRadiiMap["CA"] = 2.62 * angstrom;
     
-    // Металлы (часто встречаются в подложках или мишенях)
     fRadiiMap["FE"] = 2.44 * angstrom;
     fRadiiMap["CO"] = 2.40 * angstrom;
     fRadiiMap["NI"] = 2.40 * angstrom;
@@ -121,8 +129,6 @@ void DetectorConstruction::LoadRadii()
     fRadiiMap["ZN"] = 2.39 * angstrom;
     fRadiiMap["AG"] = 2.53 * angstrom;
     fRadiiMap["AU"] = 2.32 * angstrom;
-    
-    // Галогены и другие
     fRadiiMap["AS"] = 1.88 * angstrom;
     fRadiiMap["SE"] = 1.82 * angstrom;
     fRadiiMap["BR"] = 1.86 * angstrom;
@@ -143,12 +149,12 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
   // 1. World creation
   G4Box* solidWorld = new G4Box("World", fWorldSize/2, fWorldSize/2, fWorldSize/2);
   fpLogicWorld = new G4LogicalVolume(solidWorld, fpWorldMaterial, "World");
-  fpPhysiWorld = new G4PVPlacement(0, G4ThreeVector(), "World", fpLogicWorld, 0, false, 0);
-
+  fpPhysiWorld = new G4PVPlacement(0, G4ThreeVector(), fpLogicWorld, "World", 0, false, 0, true);
+  
+  
   // 2. Target configuration
   G4VSolid* pSolidTarget = nullptr;
-  G4LogicalVolume* pLogicTarget = nullptr;
-  
+  G4LogicalVolume* pLogicTarget = nullptr;  
   if (fGeomType == "Histone" || fGeomType == "Ribosome") {
     // Spherical targets
     pSolidTarget = new G4Orb("Target", fOuterRadius);
@@ -158,56 +164,96 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
     // Cylinder targets (PTB, StarTrack, Cytoskeleton, NMDA)
     pSolidTarget = new G4Tubs("Target", fInnerRadius, fOuterRadius, fHeight/2., 0, 360*degree);
   }
-  else{
+  else {
     G4String path_csv = "results/data/" + fGeomType + ".csv";
-    std::ifstream in(path_csv); // Here files-csv: "1kx5"
+    std::ifstream in(path_csv);
     if (!in.is_open()) {
       G4Exception("DetectorConstruction::ConstructDetector", "FileNotFound",
                   FatalException, ("Could not open file: " + path_csv).c_str());
     }
+
     G4String line, element;
     G4double x, y, z;
     
-    // Испольуем std::map вместо std::unordered_map для совместимости с G4String
-    std::map<G4String, G4LogicalVolume*> logicElements;
-
-    G4int copyNo = 0;
-    G4LogicalVolume* pLogicOrb;
+    std::vector<AtomData> atoms;
     auto radiiEnd = fRadiiMap.end();
-    while (std::getline(in, line)){
+
+    // 1. Считываем все атомы в вектор в памяти
+    G4double minX = kInfinity, maxX = -kInfinity;
+    G4double minY = kInfinity, maxY = -kInfinity;
+    G4double minZ = kInfinity, maxZ = -kInfinity;
+
+    while (std::getline(in, line)) {
       G4Tokenizer token(line);
       element = token(",");
       if (element == "element") continue;
+
       auto radiusIt = fRadiiMap.find(element);
-      if (radiusIt == radiiEnd) {
-        G4Exception("DetectorConstruction::ConstructDetector", "ElementNotFound",
-                    FatalException, ("Element " + element + " not found in Radii table.").c_str());
-      }
-      if (copyNo % 10 == 0) G4cout << "Number of atoms: " << copyNo << G4endl;
-      auto itLogic = logicElements.find(element);
-      if (itLogic == logicElements.end()){
-        G4Orb* pSolidOrb = new G4Orb("solid_" + element, radiusIt->second);
-        pLogicOrb = new G4LogicalVolume(pSolidOrb, fpWaterMaterial, "log_" + element);
-        G4VisAttributes* pVisTarget = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
-        pVisTarget->SetForceSolid(true);
-        pLogicOrb->SetVisAttributes(pVisTarget);
-        logicElements[element] = pLogicOrb;
-      } else {
-        pLogicOrb = itLogic->second;
-      }
-      
+      if (radiusIt == radiiEnd) continue;
+
       try {
         x = std::stod(token(",")) * angstrom;
         y = std::stod(token(",")) * angstrom;
         z = std::stod(token(",")) * angstrom;
       } catch (const std::exception& e) {
-        G4Exception("DetectorConstruction::ConstructDetector", "ParsingError",
-                    FatalException, ("Failed to convert coordinates to double in line: " + line).c_str());
+        continue;
       }
-      
-      new G4PVPlacement(0, G4ThreeVector(x, y, z), pLogicOrb, "Target", fpLogicWorld, false, copyNo++, false);
+
+      G4double r = radiusIt->second;
+      atoms.push_back({G4ThreeVector(x, y, z), r});
+
+      // Рассчитываем габариты всей молекулы
+      minX = std::min(minX, x - r);
+      maxX = std::max(maxX, x + r);
+      minY = std::min(minY, y - r);
+      maxY = std::max(maxY, y + r);
+      minZ = std::min(minZ, z - r);
+      maxZ = std::max(maxZ, z + r);
     }
     in.close();
+    
+    // Создаем единственный логический объем для вокселя
+    G4Box* pSolidVoxel = new G4Box("solid_Voxel", fVoxelSize/2., fVoxelSize/2., fVoxelSize/2.);
+    G4LogicalVolume* pLogicVoxel = new G4LogicalVolume(pSolidVoxel, fpWaterMaterial, "logic_Voxel");
+    
+    G4VisAttributes* pVisVoxel = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
+    pVisVoxel->SetForceSolid(true);
+    pLogicVoxel->SetVisAttributes(pVisVoxel);
+
+    // 3. Заполняем 3D сетку
+    G4int voxelCount = 0;
+    
+    for (G4double vx = minX + fVoxelSize/2.; vx < maxX; vx += fVoxelSize) {
+        for (G4double vy = minY + fVoxelSize/2.; vy < maxY; vy += fVoxelSize) {
+            for (G4double vz = minZ + fVoxelSize/2.; vz < maxZ; vz += fVoxelSize) {
+                
+                G4ThreeVector voxelPos(vx, vy, vz);
+                G4bool isInsideBiomolecule = false;
+
+                // Проверяем, находится ли центр данного вокселя внутри хотя бы одного атома
+                for (const auto& atom : atoms) {
+                    G4double dx = voxelPos.x() - atom.pos.x();
+                    G4double dy = voxelPos.y() - atom.pos.y();
+                    G4double dz = voxelPos.z() - atom.pos.z();
+                    G4double dist2 = dx*dx + dy*dy + dz*dz;
+
+                    if (dist2 < atom.radius * atom.radius) {
+                        isInsideBiomolecule = true;
+                        break;
+                    }
+                }
+
+                // Если воксель внутри структуры — размещаем его
+                if (isInsideBiomolecule) {
+                    // Размещение регулярной сетки неперекрывающихся кубов оптимизируется навигатором Geant4 автоматически
+                    new G4PVPlacement(0, voxelPos, pLogicVoxel, "Target", fpLogicWorld, false, voxelCount++, false);
+                }
+            }
+        }
+    }
+    
+    G4cout << "-> Voxel phantom built. Placed " << voxelCount << " voxels of size " << fVoxelSize/nm << " nm" << G4endl;
+    pLogicTarget = nullptr; // Объемы уже размещены напрямую в fpLogicWorld
   }
 
   if (!pLogicTarget && pSolidTarget) {
@@ -215,7 +261,7 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
   }
 
   if (pLogicTarget) {
-    new G4PVPlacement(0, G4ThreeVector(), "Target", pLogicTarget, fpPhysiWorld, false, 0);
+    new G4PVPlacement(0, G4ThreeVector(), pLogicTarget, "Target", fpLogicWorld, false, 0);
     G4VisAttributes* pVisTarget = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
     pVisTarget->SetForceSolid(true);
     pLogicTarget->SetVisAttributes(pVisTarget);
@@ -280,5 +326,16 @@ void DetectorConstruction::SetGeometry(const G4String& name)
      G4cout << "-> Geometry set to: " << fGeomType 
          << " (Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
   }
-  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  else {
+	if (std::abs(fWaterDensity - 1.0 * g/cm3) < 1e-4 * g/cm3) {
+      fWaterDensity = 1.407 * g/cm3;
+    }
+    fEfficiency = 1.0;
+    G4cout << "-> Geometry set to: " << fGeomType 
+           << " (Loading from CSV, Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
+  }
+  
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
 }

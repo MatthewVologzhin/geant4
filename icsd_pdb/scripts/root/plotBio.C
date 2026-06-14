@@ -45,7 +45,7 @@ void plotBio()
 	int energy = 1;
 	Parameters parameters;
 	//parameters.structnames = {"Cytoskeleton", "Histone", "NMDA", "Ribosome"};
-	parameters.structnames = {"NMDA"};
+	parameters.structnames = {"Histone", "1kx5", "1kx5a"};
 	parameters.partnames = {"proton", "deuteron", "alpha", "Li6", "Li7", "C12", "Ne20"};
 	parameters.prettyPartnames["proton"] = "p";
 	parameters.prettyPartnames["deuteron"] = "d";
@@ -66,7 +66,7 @@ void plotBio()
 	parameters.markers["NMDA"]         = 22; // Полный треугольник (вершиной вверх)
 	parameters.markers["Ribosome"]     = 33; // Полный ромб (Diamond)
 
-	parameters.physnames = {"DNA8"};
+	parameters.physnames = {"DNA2"};
 	parameters.colors["DNA2"] = kRed;      
 	parameters.colors["DNA4"] = kBlue;     
 	parameters.colors["DNA6"] = kGreen+2;  
@@ -78,6 +78,9 @@ void plotBio()
 	parameters.colors["Li7"] = kBlue;
 	parameters.colors["C12"] = kBlue+2;
 	parameters.colors["Ne20"] = kMagenta;
+	parameters.colors["1kx5"] = kRed;      
+	parameters.colors["1kx5a"] = kOrange;
+	parameters.colors["Histone"] = kYellow;  
 	parameters.legends["DNA2"] = Form("#bf{DNA Opt2}");
 	parameters.legends["DNA4"] = Form("#bf{DNA Opt4}");
 	parameters.legends["DNA6"] = Form("#bf{DNA Opt6}");
@@ -85,15 +88,21 @@ void plotBio()
 	
 	/* Global Axis & Legend Parameters */
 	double lineWidth = 1.5;
-	double yAxisMin = 1e-4;
-	double yAxisMax = 1e-1;
+	double yAxisMin = 1e-5;
+	double yAxisMax = 1e0;
 
 	/* 1. ПРЕДВАРИТЕЛЬНЫЙ ПОИСК МАКСИМАЛЬНОЙ ИОНИЗАЦИИ */
     double globalMaxX = 0;
     for (auto physname : parameters.physnames) {
 		for (auto structure : parameters.structnames){
 			for (auto particleName : parameters.partnames){
-				TString path = std::string("root/ICSD_") + particleName + "_" + energy*parameters.nuclons[particleName] + "-MeV" + "_" + physname + "_" + structure + ".root";
+				std::string path_std = "root/ICSD_" + std::string(particleName) + "_" 
+                       + std::to_string(energy * parameters.nuclons[particleName]) 
+                       + "-MeV_" + std::string(physname) + "_" 
+                       + std::string(structure) + ".root";
+
+				TString path = path_std.c_str();
+				
 				TFile *fTemp = TFile::Open(path.Data());
 				if (!fTemp || fTemp->IsZombie()) continue;
 				TTree *treeTemp = (TTree*)fTemp->Get("ntuple_1");
@@ -154,7 +163,12 @@ void plotBio()
 	for (auto particleName : parameters.partnames){
 		for (auto structure : parameters.structnames){
 			for (auto physname : parameters.physnames){
-				TString path = std::string("root/ICSD_") + particleName + "_" + energy*parameters.nuclons[particleName] + "-MeV_" + physname + "_" + structure + ".root";
+				std::string path_std = "root/ICSD_" + std::string(particleName) + "_" 
+                       + std::to_string(energy * parameters.nuclons[particleName]) 
+                       + "-MeV_" + std::string(physname) + "_" 
+                       + std::string(structure) + ".root";
+
+				TString path = path_std.c_str();
 				TFile *f =  new TFile(path.Data());
 				if (!f || f->IsZombie()) continue;
 				TTree *tree = (TTree*)f->Get("ntuple_1");
@@ -191,7 +205,7 @@ void plotBio()
 				}
 				
 				graph->SetLineWidth(lineWidth);
-				graph->SetLineColor(parameters.colors[particleName]);
+				graph->SetLineColor(parameters.colors[structure]);
 				//graph->SetMarkerStyle(parameters.markers[structure]);
 				graph->SetMarkerSize(1.5);
 				
@@ -259,7 +273,8 @@ void plotBio()
 				// Right Axis
 				TGaxis *rightAxis = new TGaxis(xAxisMax-0.5, yAxisMin, xAxisMax-0.5, yAxisMax, yAxisMin, yAxisMax, 510, "+GU");
 				rightAxis->Draw();
-				legend->AddEntry(graph, Form("#scale[0.8]{%s}", parameters.prettyPartnames[particleName].Data()), "el");
+				//legend->AddEntry(graph, Form("#scale[0.8]{%s}", parameters.prettyPartnames[particleName].Data()), "el");
+				legend->AddEntry(graph, Form("#scale[0.8]{%s}", structure.c_str()), "el");
 				legend->AddEntry((TObject*)0, Form("#scale[0.8]{#it{N}_{max} = %.0f}", maxIoni), "");
 
 			}
@@ -274,7 +289,7 @@ void plotBio()
 	std::string folderName = "plots";
 	if (!fs::exists(folderName)) fs::create_directory(folderName);
 	if (extra != "") extra = "-u";
-	mainCanvas->SaveAs((folderName + "/" + canvasName + extra + ".pdf").Data());
+	mainCanvas->SaveAs((std::string(folderName) + "/" + std::string(canvasName) + std::string(extra) + ".pdf").c_str());
 }
 
 const TString FormCanvasName(TString structure, int energy){

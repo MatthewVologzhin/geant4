@@ -57,6 +57,12 @@ DetectorMessenger::DetectorMessenger(DetectorConstruction* Det) : G4UImessenger(
   fpDiameterCmd->SetRange("Diameter>.0");
   fpDiameterCmd->SetUnitCategory("Length");
 
+  fpVoxelSizeCmd = new G4UIcmdWithADoubleAndUnit("/det/setVoxelSize", this);
+  fpVoxelSizeCmd->SetGuidance("Set voxel size");
+  fpVoxelSizeCmd->SetParameterName("VoxelSize", false);
+  fpVoxelSizeCmd->SetRange("VoxelSize>.0");
+  fpVoxelSizeCmd->SetUnitCategory("Length");
+
   fpHeightCmd = new G4UIcmdWithADoubleAndUnit("/det/setHeight", this);
   fpHeightCmd->SetGuidance("Set detector height");
   fpHeightCmd->SetParameterName("Height", false);
@@ -88,6 +94,7 @@ void DetectorMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
 {
   if (command == fGeomCmd) fDetector->SetGeometry(newValue);
   if (command == fpDiameterCmd) fDetector->SetDiameter(fpDiameterCmd->GetNewDoubleValue(newValue));
+  if (command == fpVoxelSizeCmd) fDetector->SetVoxelSize(fpVoxelSizeCmd->GetNewDoubleValue(newValue));
   if (command == fpHeightCmd) fDetector->SetHeight(fpHeightCmd->GetNewDoubleValue(newValue));
   if (command == fpDensityCmd) fDetector->SetDensity(fpDensityCmd->GetNewDoubleValue(newValue));
   if (command == fpEfficiencyCmd) fDetector->SetEfficiency(fpEfficiencyCmd->GetNewDoubleValue(newValue));

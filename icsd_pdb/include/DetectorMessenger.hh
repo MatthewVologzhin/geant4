@@ -46,7 +46,6 @@ class G4UIcmdWithAString;
 class G4UIcmdWithADouble;
 class G4UIcmdWithADoubleAndUnit;
 
-
 class DetectorMessenger : public G4UImessenger
 {
   public:
@@ -59,6 +58,7 @@ class DetectorMessenger : public G4UImessenger
     DetectorConstruction* fDetector = nullptr;
     G4UIdirectory* fpDetDir = nullptr;
     G4UIcmdWithADoubleAndUnit* fpDiameterCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpVoxelSizeCmd = nullptr;
     G4UIcmdWithADoubleAndUnit* fpHeightCmd = nullptr;
     G4UIcmdWithADoubleAndUnit* fpDensityCmd = nullptr;
     G4UIcmdWithADouble* fpEfficiencyCmd = nullptr;

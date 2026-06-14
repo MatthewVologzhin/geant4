@@ -57,6 +57,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     virtual G4VPhysicalVolume* Construct();
     void SetGeometry(const G4String&);
     void SetDiameter(G4double val);
+    void SetVoxelSize(G4double val);
     void SetHeight(G4double val);
     void SetEfficiency(G4double val);
     void SetDensity(G4double val);
@@ -78,6 +79,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     G4String fGeomType;
 
     G4double fEfficiency;
+    G4double fVoxelSize;
     G4double fWaterDensity, fWorldDensity;
     G4double fHeight, fDiameter, fInnerRadius, fOuterRadius;
 

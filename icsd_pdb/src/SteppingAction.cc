@@ -1,4 +1,3 @@
-//
 // ********************************************************************
 // * License and Disclaimer                                           *
 // *                                                                  *
@@ -84,14 +83,14 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   G4double detectorEfficiency = pDetector->GetEfficiency();
 
   // only ionizations in the target will be recorded  
-  if (step->GetPreStepPoint()->GetPhysicalVolume()->GetName() == "Target") {
+  if (G4StrUtil::contains(step->GetPreStepPoint()->GetPhysicalVolume()->GetName(), "Target")) {
     if (process_name == "e-_G4DNAElastic")
       flagProcess = 1;
     else if (process_name == "e-_G4DNAExcitation")
       flagProcess = 2;
     else if (subtype == 2 || subtype == 53) 
-		  flagProcess = 3;  
-
+	  flagProcess = 3;
+	
     // Energy deposited and position of the interaction are saved
     dE = step->GetTotalEnergyDeposit() / eV;
 	
@@ -99,6 +98,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       x = step->GetPostStepPoint()->GetPosition().x() / nanometer;
       y = step->GetPostStepPoint()->GetPosition().y() / nanometer;
       z = step->GetPostStepPoint()->GetPosition().z() / nanometer;
+      G4double densityPre = step->GetPreStepPoint()->GetMaterial()->GetDensity();
+      G4double densityPost = step->GetPostStepPoint()->GetMaterial()->GetDensity();
 
       // get analysis manager
       G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();

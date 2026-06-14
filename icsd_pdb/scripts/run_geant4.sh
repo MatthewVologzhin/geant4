@@ -8,16 +8,33 @@ ENERGY_VAL=$6
 ENERGY_UNIT=$7
 BEAM_ON=$8
 GEOMETRY=$9
-THREADS=${10}
-MEMORY=${11}
-DISK=${12}
-JOB_ID=${13}
+VOXEL_VAL=${10}
+VOXEL_UNIT=${11}
+THREADS=${12}
+MEMORY=${13}
+DISK=${14}
+JOB_ID=${15}
 MACRO_NAME="run_${JOB_ID}.mac"
+if [ "${PART_TYPE}" == "ion" ]; then
+    if [ "${VOXEL_VAL}" == "0" ]; then
+        FILENAME="results/output/icsd_${PART_TYPE}-${ION_Z}-${ION_A}_${ENERGY_VAL}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${JOB_ID}"
+    else
+        FILENAME="results/output/icsd_${PART_TYPE}-${ION_Z}-${ION_A}_${ENERGY_VAL}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${VOXEL_VAL}-${VOXEL_UNIT}_${JOB_ID}"
+    fi
+else
+    if [ "${VOXEL_VAL}" == "0" ]; then
+        FILENAME="results/output/icsd_${PART_TYPE}_${ENERGY_VAL}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${JOB_ID}"
+    else
+        FILENAME="results/output/icsd_${PART_TYPE}_${ENERGY_VAL}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${VOXEL_VAL}-${VOXEL_UNIT}_${JOB_ID}"
+    fi
+fi
 cat > ${MACRO_NAME} << EOF
-/run/verbose 0
+/run/verbose 1
 /control/verbose 0
 /tracking/verbose 0
+/icsd/analysis/setFileName ${FILENAME}
 /icsd/setGeom ${GEOMETRY}
+/det/setVoxelSize ${VOXEL_VAL} ${VOXEL_UNIT}
 /physics/setPhysics ${PHYSICS}
 /run/initialize
 EOF

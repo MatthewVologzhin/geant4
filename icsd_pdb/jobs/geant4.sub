@@ -7,14 +7,14 @@ executable = scripts/run_geant4.sh
 # ------------------------------------------------------------
 # 2. Logging
 # ------------------------------------------------------------
-log =       results/logs/job_$(Cluster)_$(Process).log
-output =    results/logs/job_$(Cluster)_$(Process).out
-error =     results/logs/job_$(Cluster)_$(Process).err
+log =       results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(voxel_val)-$(voxel_unit).log
+output =    results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(voxel_val)-$(voxel_unit).out
+error =     results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(voxel_val)-$(voxel_unit).log
 
 # ------------------------------------------------------------
 # 3. Arguments (make sure the script expects these)
 # ------------------------------------------------------------
-arguments = "$(physics) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(geometry) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
+arguments = "$(physics) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(geometry) $(voxel_val) $(voxel_unit) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
 
 # ------------------------------------------------------------
 # 4. Resources
@@ -27,12 +27,12 @@ request_disk = $(disk)
 # 5. Input/Output files to transfer
 # ------------------------------------------------------------
 transfer_input_files = build/icsd
-transfer_output_files = root/
-transfer_output_remaps  = "root = results/output"
+transfer_output_files = results/output/
+transfer_output_remaps  = "results/output = results/output"
 when_to_transfer_output = ON_EXIT
 should_transfer_files = YES
 
 # ------------------------------------------------------------
 # 8. Queue definition
 # ------------------------------------------------------------
-queue physics, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, geometry, cpus, memory, disk from parameters.txt
+queue physics, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, geometry, voxel_val, voxel_unit, cpus, memory, disk from parameters.txt
