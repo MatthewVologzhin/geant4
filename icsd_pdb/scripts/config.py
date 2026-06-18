@@ -69,8 +69,8 @@ molecules = {
     },
     "cytoskeleton": {
         "chain": {},
-        "cif": BASE_DIR / "input" / "6tar.cif",
-        "csv": BASE_DIR / "results" / "data" / "6tar.csv",
+        "cif": BASE_DIR / "input" / "7un1.cif",
+        "csv": BASE_DIR / "results" / "data" / "7un1.csv",
         "skip": 10
     },
 }

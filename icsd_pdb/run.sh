@@ -6,7 +6,7 @@ mkdir -p results/plots
 
 echo "Preparations are completed!"
 
-condor_submit .sub
+condor_submit jobs/geant4.sub
 
-condor_q
+watch -n 2 condor_q
 echo "Calculations are completed!"

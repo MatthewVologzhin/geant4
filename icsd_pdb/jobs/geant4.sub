@@ -7,9 +7,9 @@ executable = scripts/run_geant4.sh
 # ------------------------------------------------------------
 # 2. Logging
 # ------------------------------------------------------------
-log =       results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(voxel_val)-$(voxel_unit).log
-output =    results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(voxel_val)-$(voxel_unit).out
-error =     results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(voxel_val)-$(voxel_unit).log
+log = results/logs/job-$(Cluster)-$(Process).log
+output = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)$$([ ifThenElse($(voxel_val) > 0, strcat("_", "$(voxel_val)", "-", "$(voxel_unit)"), "") ]).out
+error  = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)$$([ ifThenElse($(voxel_val) > 0, strcat("_", "$(voxel_val)", "-", "$(voxel_unit)"), "") ]).err
 
 # ------------------------------------------------------------
 # 3. Arguments (make sure the script expects these)
@@ -26,9 +26,9 @@ request_disk = $(disk)
 # ------------------------------------------------------------
 # 5. Input/Output files to transfer
 # ------------------------------------------------------------
-transfer_input_files = build/icsd
-transfer_output_files = results/output/
-transfer_output_remaps  = "results/output = results/output"
+transfer_input_files = build/icsd, input/results
+transfer_output_files = results/output
+transfer_output_remaps  = "output = results/output"
 when_to_transfer_output = ON_EXIT
 should_transfer_files = YES
 
