@@ -80,12 +80,18 @@ DetectorMessenger::DetectorMessenger(DetectorConstruction* Det) : G4UImessenger(
   fpEfficiencyCmd->SetParameterName("Efficiency", false);
   fpEfficiencyCmd->SetRange("Efficiency>=0. && Efficiency<=1.");
 
-  fGeomCmd = new G4UIcmdWithAString("/icsd/setGeom", this);
-  //fGeomCmd->SetGuidance("Select the geometry: dna or nanodosimeter.");
+  fGeomCmd = new G4UIcmdWithAString("/det/setGeom", this);
   fGeomCmd->SetGuidance("Select the geometry: PTB/StarTrack/Cytoskeleton/Ribosome/NMDA/Histone,");
   fGeomCmd->SetParameterName("choice", false);
   fGeomCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
   fGeomCmd->SetToBeBroadcasted(false);
+  
+  fGeomMethodCmd = new G4UIcmdWithAString("/det/setGeomMethod", this);
+  fGeomMethodCmd->SetGuidance("Select the geometry construction method: VOXEL | BOOLEAN | PREDEFINED");
+  fGeomMethodCmd->SetCandidates("VOXEL BOOLEAN PREDEFINED");
+  fGeomMethodCmd->SetParameterName("choice", false);
+  fGeomMethodCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+  fGeomMethodCmd->SetToBeBroadcasted(false);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -98,6 +104,7 @@ void DetectorMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
   if (command == fpHeightCmd) fDetector->SetHeight(fpHeightCmd->GetNewDoubleValue(newValue));
   if (command == fpDensityCmd) fDetector->SetDensity(fpDensityCmd->GetNewDoubleValue(newValue));
   if (command == fpEfficiencyCmd) fDetector->SetEfficiency(fpEfficiencyCmd->GetNewDoubleValue(newValue));
+  if (command == fGeomMethodCmd) fDetector->SetGeometryMethod(newValue);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

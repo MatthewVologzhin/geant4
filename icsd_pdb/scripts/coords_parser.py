@@ -49,32 +49,45 @@ def parser(name):
 
         # 2. Второй проход: собираем данные
         # Итерируемся по моделям -> цепочкам -> остаткам -> атомам
-        for model in structure:
-            for chain in model:
-                chain_id = chain.get_id()
-                for residue in chain:
-                    for atom in residue:
-                        element = atom.element # Biopython сам определяет элемент (C, N, O...)
-                        if len(element) > 1 and element not in ["CL", "MG", "FE", "ZN", "MN", "CA", "NA"]:
-                            element = element[0]
-                        coord = atom.get_coord()
-                        
-                        # Определяем, пустой атом или гистон (твоя логика)
-                        if chain_id in molecules[name]["chain"]:
-                            continue
-                        else:
-                            element_label = element
-                        
-                        atoms.append([
-                            element_label, 
-                            coord[0] - average_x, 
-                            coord[1] - average_y, 
-                            coord[2] - average_z
-                        ])
-                        uni_atoms.add(element)
-
+        
+        atom_counter = 0
+        domain_counter = 0
+        domain_max = 150
+        model = structure[0]
+        for chain in model:
+            domain_id = 0
+            atom_inner_counter = 0
+            chain_id = chain.get_id()
+            if chain_id in molecules[name]["chain"]:
+                continue
+            for residue in chain:
+                for atom in residue:
+                    element = atom.element # Biopython сам определяет элемент (C, N, O...)
+                    if len(element) > 1 and element not in ["CL", "MG", "FE", "ZN", "MN", "CA", "NA"]:
+                        element = element[0]
+                    coord = atom.get_coord()
+                    element_label = element
+                    atoms.append([
+                        chain_id,
+                        domain_id,
+                        element_label, 
+                        coord[0] - average_x, 
+                        coord[1] - average_y, 
+                        coord[2] - average_z
+                    ])
+                    uni_atoms.add(element)
+                    atom_inner_counter += 1
+                    atom_counter += 1
+                    
+                if (atom_inner_counter >= domain_max):
+                    domain_id += 1
+                    domain_counter += 1
+                    atom_inner_counter = 0
         # Сохранение в CSV
-        df_out = pd.DataFrame(atoms, columns=['element', 'x', 'y', 'z'])
+        print(f"===== {name} =====")
+        print(f"Number of atoms: {atom_counter}")
+        print(f"Number of domains: {domain_counter}")
+        df_out = pd.DataFrame(atoms, columns=['chain_id', 'domain_id', 'element', 'x', 'y', 'z'])
         df_out.to_csv(output_path, index=False)
         
         print(f"Average: {average_x:.2f} | {average_y:.2f} | {average_z:.2f}")

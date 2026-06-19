@@ -1,6 +1,8 @@
 #/control/execute vis.mac
 #/tracking/verbose 0
 /run/printProgress 1
+/run/verbose 2
+/control/verbose 2
 #/icsd/setGeom nanodosimeter
 /physics/setPhysics G4EmDNAPhysics_option2
 /det/setGeom 7un1
@@ -8,6 +10,7 @@
 /det/setVoxelSize 2 nm
 /icsd/analysis/setFileName check/check
 /run/initialize
+#/geometry/test/run
 
 /gun/particle ion
 /gun/ion 1 1 1

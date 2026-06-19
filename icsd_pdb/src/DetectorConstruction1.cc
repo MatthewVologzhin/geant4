@@ -16,44 +16,6 @@
 
 #include <fstream>
 
-#include "G4UnionSolid.hh" // Не забудьте добавить этот заголовочный файл!
-
-static G4VSolid* BuildBalancedUnion(
-    const std::vector<std::pair<G4VSolid*, G4ThreeVector>>& nodes,
-    size_t start,
-    size_t end,
-    G4ThreeVector& out_origin,
-    const G4String& name_prefix,
-    int& solid_counter
-) {
-    if (start == end) {
-        out_origin = nodes[start].second;
-        return nodes[start].first;
-    }
-
-    if (end - start == 1) {
-        G4VSolid* left = nodes[start].first;
-        G4VSolid* right = nodes[end].first;
-        out_origin = nodes[start].second;
-        G4ThreeVector translation = nodes[end].second - nodes[start].second;
-
-        G4String name = name_prefix + "_u" + std::to_string(solid_counter++);
-        return new G4UnionSolid(name, left, right, nullptr, translation);
-    }
-
-    size_t mid = start + (end - start) / 2;
-    G4ThreeVector origin_left, origin_right;
-
-    G4VSolid* left_union = BuildBalancedUnion(nodes, start, mid, origin_left, name_prefix, solid_counter);
-    G4VSolid* right_union = BuildBalancedUnion(nodes, mid + 1, end, origin_right, name_prefix, solid_counter);
-
-    out_origin = origin_left;
-    G4ThreeVector translation = origin_right - origin_left;
-
-    G4String name = name_prefix + "_u" + std::to_string(solid_counter++);
-    return new G4UnionSolid(name, left_union, right_union, nullptr, translation);
-}
-
 struct AtomData {
     G4ThreeVector pos;
     G4double radius;
@@ -150,8 +112,9 @@ void DetectorConstruction::BuildPredefinedGeometry(){
   }
 }
 
-void DetectorConstruction::BuildBooleanGeometry()
-{
+void DetectorConstruction::BuildBooleanGeometry(){
+	G4VSolid* pSolidTarget = nullptr;
+	G4LogicalVolume* pLogicTarget = nullptr;  
     G4String path_csv = "results/data/" + fGeomType + ".csv";
     std::ifstream in(path_csv);
     if (!in.is_open()) {
@@ -159,29 +122,25 @@ void DetectorConstruction::BuildBooleanGeometry()
                   FatalException, ("Could not open file: " + path_csv).c_str());
     }
 
-    G4cout << "-> Parsing CSV for Pure Balanced G4UnionSolid geometry: " << path_csv << G4endl;
-
-    G4String line, element, chain_id, domain_id_str;
+    G4String line, element, chain_id, domain_id;
     G4double x, y, z;
     
-    // Группируем атомы просто по цепям (домены на уровне геометрии больше не нужны!)
     std::map<G4String, std::vector<AtomData>> chain_atoms;
     std::map<G4String, G4Orb*> pSolidOrbs;
     auto radiiEnd = fRadiiMap.end();
 
+    // 1. Считываем все атомы в вектор в памяти
     G4double minX = kInfinity, maxX = -kInfinity;
     G4double minY = kInfinity, maxY = -kInfinity;
     G4double minZ = kInfinity, maxZ = -kInfinity;
 
     while (std::getline(in, line)) {
-      if (line.empty()) continue;
       G4Tokenizer token(line);
       chain_id = token(",");
-      domain_id_str = token(",");
+      domain_id = token(",");
       element = token(",");
-      
       if (chain_id == "chain_id") continue;
-      if (domain_id_str == "domain_id") continue;
+      if (domain_id == "domain_id") continue;
       if (element == "element") continue;
 
       auto radiusIt = fRadiiMap.find(element);
@@ -206,56 +165,55 @@ void DetectorConstruction::BuildBooleanGeometry()
       minZ = std::min(minZ, z - r);
       maxZ = std::max(maxZ, z + r);
       
+      // Cоздаём ограниченное число solid-шаров, чтобы не переполнять память
       if (pSolidOrbs.find(element) == pSolidOrbs.end()){
 	      pSolidOrbs[element] = new G4Orb("solid_orb_" + element, r);
       } 
     }
     in.close();
     
-    G4ThreeVector pMoleculeCenter((maxX + minX)/2.0, (maxY + minY)/2.0, (maxZ + minZ)/2.0);
-    G4double shift = 1.0 * nm;
-    G4ThreeVector pMoleculeSize((maxX - minX)/2.0 + shift, (maxY - minY)/2.0 + shift, (maxZ - minZ)/2.0 + shift);
+    // Вычисляем центральное положение и размер "молекулы"
+    G4ThreeVector moleculeCenter((maxX + minX)/2, 
+								 (maxY + minY)/2, 
+								 (maxZ + minZ)/2);
+    G4double shift = 1*nm; // Разделение границ
+    G4ThreeVector moleculeSize((maxX - minX)/2 + shift, 
+							   (maxY - minY)/2 + shift, 
+							   (maxZ - minZ)/2 + shift);
     
-    G4Box* pSolidMolecule = new G4Box("solid_molecule", pMoleculeSize.x(), pMoleculeSize.y(), pMoleculeSize.z());
+    // Создаем материнский водный куб для упрощения навигации частицы
+    G4Box* pSolidMolecule = new G4Box("solid_molecule", moleculeSize.x(), moleculeSize.y(), moleculeSize.z());
     G4LogicalVolume* pLogicMolecule = new G4LogicalVolume(pSolidMolecule, fpWorldMaterial, "logic_molecule");
     pLogicMolecule->SetVisAttributes(&G4VisAttributes::GetInvisible());
     
-    new G4PVPlacement(nullptr, pMoleculeCenter, pLogicMolecule, "molecule", fpLogicWorld, false, 0, true);
+    new G4PVPlacement(nullptr, moleculeCenter, pLogicMolecule, "molecule", fpLogicWorld, false, 0, false);
 
+    // Начинаем заполнять бокс-навигации
     G4int chain_counter = 0;
-    G4int solid_counter = 0;
-    
-    // Сборка цепей напрямую из атомов в сбалансированное дерево G4UnionSolid (БЕЗ Voxelize и MultiUnion!)
-    for (const auto& [chain_id, atoms] : chain_atoms) {
-        if (atoms.empty()) continue;
-
-        G4cout << "-> Building chain " << chain_id << " (" << atoms.size() << " atoms)..." << G4endl;
-
-        std::vector<std::pair<G4VSolid*, G4ThreeVector>> atom_nodes;
-        for (const auto& atom : atoms) {
-            G4Orb* shared_orb = pSolidOrbs[atom.element];
-            atom_nodes.push_back({shared_orb, atom.pos});
-        }
-
-        // Строим идеально сбалансированное дерево G4UnionSolid
-        G4ThreeVector pChainCenter;
-        G4VSolid* pSolidChain = BuildBalancedUnion(
-            atom_nodes, 0, atom_nodes.size() - 1, pChainCenter,
-            "Chain_" + chain_id, solid_counter
-        );
-
-        G4LogicalVolume* pLogicChain = new G4LogicalVolume(pSolidChain, fpWaterMaterial, "logic_chain_" + chain_id);
-        pLogicChain->SetVisAttributes(&G4VisAttributes::GetInvisible());
-
-        G4ThreeVector pRelativePosChain = pChainCenter - pMoleculeCenter;
-        
-        new G4PVPlacement(nullptr, pRelativePosChain, pLogicChain, "chain_" + chain_id, pLogicMolecule, false, chain_counter++, false);
-    }
-    fpPhysiWorld->CheckOverlaps(1000, 0.0, true);
-    
-    G4cout << "-> Pure G4UnionSolid Balanced Tree geometry built successfully!" << G4endl;
-    G4cout << "-> Total unique G4Orb solids allocated: " << pSolidOrbs.size() << G4endl;
+    G4VisAttributes* pVisChain = new G4VisAttributes(true, G4Colour(1.0, 0.0, 0.0));
+    pVisChain->SetForceSolid(true);
+    for (const auto& [chain_id, atoms] : chain_atoms){
+		G4cout << chain_id << G4endl;
+		if (atoms.empty()) continue;
+		
+		G4MultiUnion* pSolidChain = new G4MultiUnion("chain_" + chain_id);
+		G4ThreeVector chainCenter = atoms[0].pos;
+		for (const auto& atom : atoms){
+			G4ThreeVector relativePos = atom.pos - chainCenter;
+			G4Transform3D transform(G4RotationMatrix(), relativePos);
+			G4Orb* pOrb = pSolidOrbs[atom.element];
+			pSolidChain->AddNode(*pOrb, transform);
+		}
+		pSolidChain->Voxelize();
+		G4LogicalVolume* pLogicChain = new G4LogicalVolume(pSolidChain, fpWaterMaterial, "logic_chain_" + chain_id);
+		pLogicChain->SetVisAttributes(pVisChain);
+		G4ThreeVector relativePosChain = chainCenter - moleculeCenter;
+		new G4PVPlacement(nullptr, relativePosChain, pLogicChain, "chian" + chain_id, pLogicMolecule, false, chain_counter++, false);
+	}
+	G4cout << "-> Boolean G4MultiUnion geometry built successfully with G4Orb reuse." << G4endl;
+    G4cout << "-> Total unique G4Orb solids allocated in memory: " << pSolidOrbs.size() << G4endl;
     G4cout << "-> Created " << chain_atoms.size() << " chains inside Molecule container." << G4endl;
+    
 }
 
 void DetectorConstruction::BuildVoxelGeometry()

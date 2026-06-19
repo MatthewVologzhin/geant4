@@ -29,9 +29,6 @@ const G4int fThreads = 40;
 	auto pGenerator = new PrimaryGeneratorAction();
 	pRunManager->SetUserInitialization(new ActionInitialization());
 	
-	G4VisManager* pVisManager = new G4VisExecutive;
-	pVisManager->Initialize();
-	
 	G4UImanager* pUImanager = G4UImanager::GetUIpointer();
 	
 	if (argc > 1){
@@ -39,12 +36,15 @@ const G4int fThreads = 40;
 		G4String fileName = argv[1];
 		pUImanager->ApplyCommand(command+fileName);
 	} else {
+		G4VisManager* pVisManager = new G4VisExecutive;
+		pVisManager->Initialize();
 		G4UIExecutive* ui = new G4UIExecutive(argc, argv);
 		pUImanager->ApplyCommand("/control/execute vis.mac");
 		ui->SessionStart();
 		delete ui;
+		delete pVisManager;
 	}
-	delete pVisManager;
+	
 	delete pRunManager;
 	
 	return 0;

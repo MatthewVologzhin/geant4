@@ -13,7 +13,7 @@ if __name__ == "__main__":
     path.mkdir(parents=True, exist_ok=True)
     for name in molecules:
         parser(name)
-    visualize_molecules()
+    #visualize_molecules()
     #paths = ["1kx5.csv", "4V6X.csv", "6WHT.csv", "6tar.csv"]
     #for p in paths:
     #    print(f"Number of overlaps: {check_overlaps(path / p)}")

@@ -46,6 +46,13 @@
 
 #include <unordered_map>
 
+enum class GeometryMethod {
+		VOXEL,
+		BOOLEAN,
+		PREDEFINED,
+		UNKNOWN
+};
+
 class DetectorMessenger;
 
 class DetectorConstruction : public G4VUserDetectorConstruction
@@ -56,6 +63,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
 
     virtual G4VPhysicalVolume* Construct();
     void SetGeometry(const G4String&);
+    void SetGeometryMethod(const G4String&);
     void SetDiameter(G4double val);
     void SetVoxelSize(G4double val);
     void SetHeight(G4double val);
@@ -75,6 +83,8 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     G4Material* fpWorldMaterial = nullptr;
     G4Material* fpTHFMaterial = nullptr;
     G4Material* fpN2Material = nullptr;
+    
+    GeometryMethod fGeometryMethod;
 
     G4String fGeomType;
 
@@ -86,6 +96,9 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     std::map<G4String, G4double> fRadiiMap;
 
     void DefineMaterials();
+    void BuildVoxelGeometry();
+    void BuildBooleanGeometry();
+    void BuildPredefinedGeometry();
     G4VPhysicalVolume* ConstructDetector();
 
     DetectorMessenger* fDetectorMessenger;
