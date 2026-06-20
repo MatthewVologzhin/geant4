@@ -27,6 +27,7 @@ PhysicsList::PhysicsList() : G4VModularPhysicsList(){
 	
 	AddTransportation();
 	//fpEmPhysicsList = new G4EmLivermorePhysics();
+	fPhysName = "G4EmDNAPhysics_option2";
 	fpEmPhysicsList = new G4EmDNAPhysics_option2(verboseLevel);
 	RegisterPhysics(fpEmPhysicsList);
 	
@@ -70,6 +71,7 @@ void PhysicsList::RegisterPhysicsConstructor(const G4String& name){
   }
   
   if (pNewPhysics){
+	  RemovePhysics(fpEmPhysicsList);
       ReplacePhysics(pNewPhysics);
       fPhysName = name;
       fpEmPhysicsList = pNewPhysics;
