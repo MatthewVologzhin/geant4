@@ -52,9 +52,11 @@ def parser(name):
         
         atom_counter = 0
         domain_counter = 0
+        chain_counter = 0
         domain_max = 150
         model = structure[0]
         for chain in model:
+            chain_counter += 1
             domain_id = 0
             atom_inner_counter = 0
             chain_id = chain.get_id()
@@ -87,6 +89,7 @@ def parser(name):
         print(f"===== {name} =====")
         print(f"Number of atoms: {atom_counter}")
         print(f"Number of domains: {domain_counter}")
+        print(f"Number of chains: {chain_counter}")
         df_out = pd.DataFrame(atoms, columns=['chain_id', 'domain_id', 'element', 'x', 'y', 'z'])
         df_out.to_csv(output_path, index=False)
         

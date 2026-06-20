@@ -1,5 +1,6 @@
 #/control/execute vis.mac
 #/tracking/verbose 0
+/run/numberOfThreads 1
 /run/printProgress 1
 /run/verbose 2
 /control/verbose 2

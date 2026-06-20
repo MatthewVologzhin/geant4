@@ -12,11 +12,8 @@
 #include "G4VisAttributes.hh"
 #include "G4Tokenizer.hh"
 #include "G4StateManager.hh"
-#include "G4MultiUnion.hh"
-
+#include "G4UnionSolid.hh"
 #include <fstream>
-
-#include "G4UnionSolid.hh" // Не забудьте добавить этот заголовочный файл!
 
 static G4VSolid* BuildBalancedUnion(
     const std::vector<std::pair<G4VSolid*, G4ThreeVector>>& nodes,
@@ -148,6 +145,13 @@ void DetectorConstruction::BuildPredefinedGeometry(){
 				"InvalidPredefinedGeometry", FatalException,
 				"GeomType must be Histone, Ribosome, NMDA, Cytoskeleton, StarTrack, PTB!"); 
   }
+  pLogicTarget = new G4LogicalVolume(pSolidTarget, fpWaterMaterial, "logic_Target");
+  if (pLogicTarget) {
+    new G4PVPlacement(0, G4ThreeVector(), pLogicTarget, "Target", fpLogicWorld, false, 0);
+    G4VisAttributes* pVisTarget = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
+    pVisTarget->SetForceSolid(true);
+    pLogicTarget->SetVisAttributes(pVisTarget);
+  }
 }
 
 void DetectorConstruction::BuildBooleanGeometry()
@@ -213,7 +217,7 @@ void DetectorConstruction::BuildBooleanGeometry()
     in.close();
     
     G4ThreeVector pMoleculeCenter((maxX + minX)/2.0, (maxY + minY)/2.0, (maxZ + minZ)/2.0);
-    G4double shift = 1.0 * nm;
+    G4double shift = 3.0 * nm;
     G4ThreeVector pMoleculeSize((maxX - minX)/2.0 + shift, (maxY - minY)/2.0 + shift, (maxZ - minZ)/2.0 + shift);
     
     G4Box* pSolidMolecule = new G4Box("solid_molecule", pMoleculeSize.x(), pMoleculeSize.y(), pMoleculeSize.z());
@@ -226,6 +230,7 @@ void DetectorConstruction::BuildBooleanGeometry()
     G4int solid_counter = 0;
     
     // Сборка цепей напрямую из атомов в сбалансированное дерево G4UnionSolid (БЕЗ Voxelize и MultiUnion!)
+    std::vector<std::pair<G4VSolid*, G4ThreeVector>> pSolidChains;
     for (const auto& [chain_id, atoms] : chain_atoms) {
         if (atoms.empty()) continue;
 
@@ -244,14 +249,26 @@ void DetectorConstruction::BuildBooleanGeometry()
             "Chain_" + chain_id, solid_counter
         );
 
-        G4LogicalVolume* pLogicChain = new G4LogicalVolume(pSolidChain, fpWaterMaterial, "logic_chain_" + chain_id);
-        pLogicChain->SetVisAttributes(&G4VisAttributes::GetInvisible());
+        //G4LogicalVolume* pLogicChain = new G4LogicalVolume(pSolidChain, fpWaterMaterial, "logic_chain_" + chain_id);
+        //pLogicChain->SetVisAttributes(&G4VisAttributes::GetInvisible());
 
-        G4ThreeVector pRelativePosChain = pChainCenter - pMoleculeCenter;
+        //G4ThreeVector pRelativePosChain = pChainCenter - pMoleculeCenter;
         
-        new G4PVPlacement(nullptr, pRelativePosChain, pLogicChain, "chain_" + chain_id, pLogicMolecule, false, chain_counter++, false);
+        pSolidChains.push_back({pSolidChain, pChainCenter});
+        //new G4PVPlacement(nullptr, pRelativePosChain, pLogicChain, "chain_" + chain_id, pLogicMolecule, false, chain_counter++, false);
     }
-    fpPhysiWorld->CheckOverlaps(1000, 0.0, true);
+    
+    G4ThreeVector moleculeWholeCenter;
+    G4VSolid* pSolidWholeMolecule = BuildBalancedUnion(pSolidChains, 0, pSolidChains.size()-1, moleculeWholeCenter, "solid_wholeMolecule", chain_counter);
+    G4LogicalVolume* pLogicWholeMolecule = new G4LogicalVolume(pSolidWholeMolecule, fpWaterMaterial, "logic_wholeMolecule");
+    G4VisAttributes* pVisWholeMolecule = new G4VisAttributes();
+	pVisWholeMolecule->SetColour(G4Colour(1.0, 0.0, 0.0, 0.3));
+	pVisWholeMolecule->SetForceSolid(true);
+	pVisWholeMolecule->SetVisibility(true);
+    pLogicWholeMolecule->SetVisAttributes(pVisWholeMolecule);
+    new G4PVPlacement(nullptr, moleculeWholeCenter, pLogicWholeMolecule, "wholeMolecule_Target", pLogicMolecule, false, 0, false);
+    
+	//fpPhysiWorld->CheckOverlaps(1000, 0.0, true);
     
     G4cout << "-> Pure G4UnionSolid Balanced Tree geometry built successfully!" << G4endl;
     G4cout << "-> Total unique G4Orb solids allocated: " << pSolidOrbs.size() << G4endl;
