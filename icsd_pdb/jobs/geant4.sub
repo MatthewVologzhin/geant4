@@ -8,13 +8,13 @@ executable = scripts/run_geant4.sh
 # 2. Logging
 # ------------------------------------------------------------
 log = results/logs/job-$(Cluster)-$(Process).log
-output = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)$$([ ifThenElse($(voxel_val) > 0, strcat("_", "$(voxel_val)", "-", "$(voxel_unit)"), "") ]).out
-error  = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)$$([ ifThenElse($(voxel_val) > 0, strcat("_", "$(voxel_val)", "-", "$(voxel_unit)"), "") ]).err
+output = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).out
+error  = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).err
 
 # ------------------------------------------------------------
 # 3. Arguments (make sure the script expects these)
 # ------------------------------------------------------------
-arguments = "$(physics) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(geometry) $(voxel_val) $(voxel_unit) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
+arguments = "$(physics) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(geometry) $(geometry_method) $(voxel_val) $(voxel_unit) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
 
 # ------------------------------------------------------------
 # 4. Resources
@@ -26,7 +26,7 @@ request_disk = $(disk)
 # ------------------------------------------------------------
 # 5. Input/Output files to transfer
 # ------------------------------------------------------------
-transfer_input_files = build/icsd, input/results
+transfer_input_files = build/icsd, results/csv
 transfer_output_files = results/output
 transfer_output_remaps  = "output = results/output"
 when_to_transfer_output = ON_EXIT
@@ -35,4 +35,4 @@ should_transfer_files = YES
 # ------------------------------------------------------------
 # 8. Queue definition
 # ------------------------------------------------------------
-queue physics, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, geometry, voxel_val, voxel_unit, cpus, memory, disk from parameters.txt
+queue physics, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, geometry, geometry_method, voxel_val, voxel_unit, cpus, memory, disk from parameters.txt

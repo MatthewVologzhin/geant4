@@ -41,6 +41,8 @@ RunAction::RunAction() : G4UserRunAction(), fFileName("output"){
     analysisManager->CreateNtuple("ntuple_3", "multipleionisations");
     analysisManager->CreateNtupleDColumn(3, "multipleIonisations");
     analysisManager->FinishNtuple(3);
+
+    analysisManager->SetActivation(true);
 }
 
 RunAction::~RunAction(){

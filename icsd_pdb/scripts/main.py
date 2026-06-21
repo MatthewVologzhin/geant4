@@ -5,11 +5,10 @@ import sys
 from config import *
 from coords_parser import parser
 from visualize import visualize_molecules
-from check_overlaps import *
 
 if __name__ == "__main__":
     
-    path = BASE_DIR / "results" / "data"
+    path = BASE_DIR / "results" / "csv"
     path.mkdir(parents=True, exist_ok=True)
     for name in molecules:
         parser(name)

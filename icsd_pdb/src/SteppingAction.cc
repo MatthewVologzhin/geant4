@@ -83,7 +83,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
   G4double detectorEfficiency = pDetector->GetEfficiency();
 
   // only ionizations in the target will be recorded  
-  if (G4StrUtil::contains(step->GetPreStepPoint()->GetPhysicalVolume()->GetName(), "Target")) {
+  G4String volName = step->GetPreStepPoint()->GetPhysicalVolume()->GetName();
+  if (volName.contains("Target")){
     if (process_name == "e-_G4DNAElastic")
       flagProcess = 1;
     else if (process_name == "e-_G4DNAExcitation")

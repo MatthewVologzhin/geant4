@@ -66,6 +66,7 @@ DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
   fWaterDensity = 1. * g/cm3;
   fEfficiency = 1.0;
   fVoxelSize = 5. * angstrom; 
+  fDataDir = "csv";
   fGeomType = "PTB";
   fDetectorMessenger = new DetectorMessenger(this);
   LoadRadii();
@@ -156,7 +157,7 @@ void DetectorConstruction::BuildPredefinedGeometry(){
 
 void DetectorConstruction::BuildBooleanGeometry()
 {
-    G4String path_csv = "results/data/" + fGeomType + ".csv";
+    G4String path_csv = fDataDir + "/" + fGeomType + ".csv";
     std::ifstream in(path_csv);
     if (!in.is_open()) {
       G4Exception("DetectorConstruction::ConstructDetector", "FileNotFound",
@@ -262,9 +263,9 @@ void DetectorConstruction::BuildBooleanGeometry()
     G4VSolid* pSolidWholeMolecule = BuildBalancedUnion(pSolidChains, 0, pSolidChains.size()-1, moleculeWholeCenter, "solid_wholeMolecule", chain_counter);
     G4LogicalVolume* pLogicWholeMolecule = new G4LogicalVolume(pSolidWholeMolecule, fpWaterMaterial, "logic_wholeMolecule");
     G4VisAttributes* pVisWholeMolecule = new G4VisAttributes();
-	pVisWholeMolecule->SetColour(G4Colour(1.0, 0.0, 0.0, 0.3));
-	pVisWholeMolecule->SetForceSolid(true);
-	pVisWholeMolecule->SetVisibility(true);
+	  pVisWholeMolecule->SetColour(G4Colour(1.0, 0.0, 0.0, 0.3));
+	  pVisWholeMolecule->SetForceSolid(true);
+	  pVisWholeMolecule->SetVisibility(true);
     pLogicWholeMolecule->SetVisAttributes(pVisWholeMolecule);
     new G4PVPlacement(nullptr, moleculeWholeCenter, pLogicWholeMolecule, "wholeMolecule_Target", pLogicMolecule, false, 0, false);
     
@@ -278,8 +279,8 @@ void DetectorConstruction::BuildBooleanGeometry()
 void DetectorConstruction::BuildVoxelGeometry()
 {
     G4VSolid* pSolidTarget = nullptr;
-	G4LogicalVolume* pLogicTarget = nullptr;  
-    G4String path_csv = "results/data/" + fGeomType + ".csv";
+	  G4LogicalVolume* pLogicTarget = nullptr;  
+    G4String path_csv = fDataDir + "/" + fGeomType + ".csv";
     std::ifstream in(path_csv);
     if (!in.is_open()) {
       G4Exception("DetectorConstruction::ConstructDetector", "FileNotFound",
@@ -520,6 +521,12 @@ void DetectorConstruction::SetDensity(G4double val)
   if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
 	  G4RunManager::GetRunManager()->ReinitializeGeometry();
   }
+}
+
+void DetectorConstruction::SetDataDir(const G4String& val)
+{
+  fDataDir = val;
+  G4cout << "-> Data directory set to: " << fDataDir << G4endl;
 }
 
 void DetectorConstruction::LoadRadii()

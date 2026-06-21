@@ -92,6 +92,11 @@ DetectorMessenger::DetectorMessenger(DetectorConstruction* Det) : G4UImessenger(
   fGeomMethodCmd->SetParameterName("choice", false);
   fGeomMethodCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
   fGeomMethodCmd->SetToBeBroadcasted(false);
+
+  fDataDirCmd = new G4UIcmdWithAString("/det/setDataDir", this);
+  fDataDirCmd->SetGuidance("Set directory containing geometry CSV files.");
+  fDataDirCmd->SetParameterName("dataDir", false);
+  fDataDirCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -105,6 +110,7 @@ void DetectorMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
   if (command == fpDensityCmd) fDetector->SetDensity(fpDensityCmd->GetNewDoubleValue(newValue));
   if (command == fpEfficiencyCmd) fDetector->SetEfficiency(fpEfficiencyCmd->GetNewDoubleValue(newValue));
   if (command == fGeomMethodCmd) fDetector->SetGeometryMethod(newValue);
+  if (command == fDataDirCmd) fDetector->SetDataDir(newValue);
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

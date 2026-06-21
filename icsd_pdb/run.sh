@@ -1,7 +1,7 @@
 #!/bin/bash
 mkdir -p results/logs
 mkdir -p results/output
-mkdir -p results/data
+mkdir -p results/csv
 mkdir -p results/plots
 
 echo "Preparations are completed!"

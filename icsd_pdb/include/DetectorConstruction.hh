@@ -69,6 +69,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     void SetHeight(G4double val);
     void SetEfficiency(G4double val);
     void SetDensity(G4double val);
+    void SetDataDir(const G4String& val);
     void LoadRadii();
 
     G4double GetEfficiency() const {return fEfficiency;}
@@ -86,7 +87,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
     
     GeometryMethod fGeometryMethod;
 
-    G4String fGeomType;
+    G4String fGeomType, fDataDir;
 
     G4double fEfficiency;
     G4double fVoxelSize;

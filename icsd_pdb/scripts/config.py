@@ -49,28 +49,28 @@ color_map = {
 molecules = {
     "histone": {
         "chain": {"I", "J"},
-        "cif": BASE_DIR / "input" / "1kx5.cif",
-        "csv": BASE_DIR / "results" / "data" / "1kx5.csv",
+        "cif": BASE_DIR / "input" / "cif" / "1kx5.cif",
+        "csv": BASE_DIR / "results" / "csv" / "1kx5.csv",
         "skip": 1
     },
     "NMDA": {
         # Для NMDA-рецептора (6WHT) цепи обычно A, B, C, D (гетеротетрамер)
         "chain": {}, 
-        "cif": BASE_DIR / "input" / "6WHT.cif",
-        "csv": BASE_DIR / "results" / "data" / "6WHT.csv",
+        "cif": BASE_DIR / "input" / "cif" / "6WHT.cif",
+        "csv": BASE_DIR / "results" / "csv" / "6WHT.csv",
         "skip": 5
     },
     "ribosome": {
         # Рибосома (4V6X) очень большая, укажем основные цепи или оставим пустым для "all"
         "chain": {}, 
-        "cif": BASE_DIR / "input" / "4V6X.cif",
-        "csv": BASE_DIR / "results" / "data" / "4V6X.csv",
+        "cif": BASE_DIR / "input" / "cif" / "4V6X.cif",
+        "csv": BASE_DIR / "results" / "csv" / "4V6X.csv",
         "skip": 25 # Увеличил пропуск для производительности
     },
     "cytoskeleton": {
         "chain": {},
-        "cif": BASE_DIR / "input" / "7un1.cif",
-        "csv": BASE_DIR / "results" / "data" / "7un1.csv",
+        "cif": BASE_DIR / "input" / "cif" / "7un1.cif",
+        "csv": BASE_DIR / "results" / "csv" / "7un1.csv",
         "skip": 10
     },
 }

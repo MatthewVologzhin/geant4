@@ -64,6 +64,7 @@ class DetectorMessenger : public G4UImessenger
     G4UIcmdWithADouble* fpEfficiencyCmd = nullptr;
     G4UIcmdWithAString* fGeomCmd = nullptr;
     G4UIcmdWithAString* fGeomMethodCmd = nullptr;
+    G4UIcmdWithAString* fDataDirCmd = nullptr;
 };
 
 #endif
