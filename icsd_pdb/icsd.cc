@@ -13,7 +13,6 @@
 
 int main(int argc, char** argv)
 {
-const G4int fThreads = 40;
 
 	long seed = ((long) time(NULL));
 	long enterseed = ((long) time(NULL)) + seed;
@@ -21,7 +20,8 @@ const G4int fThreads = 40;
 	G4Random::showEngineStatus();
 
 	auto pRunManager = G4RunManagerFactory::CreateRunManager();
-	pRunManager->SetNumberOfThreads(fThreads);
+	G4int nThreads = G4Threading::G4GetNumberOfCores();
+	pRunManager->SetNumberOfThreads(nThreads);
 	
 	pRunManager->SetUserInitialization(new DetectorConstruction());
 	auto pPhysList = new PhysicsList();

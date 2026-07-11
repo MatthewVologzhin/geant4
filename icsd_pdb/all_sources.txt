@@ -1,0 +1,2874 @@
+=== FILE: ./scripts/run_geant4.sh ===
+#!/bin/bash
+PHYSICS=$1
+PART_TYPE=$2
+ION_Z=$3
+ION_A=$4
+ION_Q=$5
+ENERGY_VAL=$6
+ENERGY_UNIT=$7
+BEAM_ON=$8
+GEOMETRY=$9
+GEOMETRY_METHOD=${10}
+VOXEL_VAL=${11}
+VOXEL_UNIT=${12}
+THREADS=${13}
+MEMORY=${14}
+DISK=${15}
+JOB_ID=${16}
+MACRO_NAME="run_${JOB_ID}.mac"
+
+ENERGY_VAL_P="${ENERGY_VAL//./p}"
+if [ "${PART_TYPE}" == "ion" ]; then
+    if [ "${VOXEL_VAL}" == 0 ]; then
+        FILENAME="output/root/icsd_${PART_TYPE}-${ION_Z}-${ION_A}_${ENERGY_VAL_P}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${GEOMETRY_METHOD}_${JOB_ID}"
+    else
+        FILENAME="output/root/icsd_${PART_TYPE}-${ION_Z}-${ION_A}_${ENERGY_VAL_P}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${GEOMETRY_METHOD}_${VOXEL_VAL}-${VOXEL_UNIT}_${JOB_ID}"
+    fi
+else
+    if [ "${VOXEL_VAL}" == 0 ]; then
+        FILENAME="output/root/icsd_${PART_TYPE}_${ENERGY_VAL_P}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${GEOMETRY_METHOD}_${JOB_ID}"
+    else
+        FILENAME="output/root/icsd_${PART_TYPE}_${ENERGY_VAL_P}-${ENERGY_UNIT}_${PHYSICS}_${GEOMETRY}_${GEOMETRY_METHOD}_${VOXEL_VAL}-${VOXEL_UNIT}_${JOB_ID}"
+    fi
+fi
+cat > ${MACRO_NAME} << EOF
+/run/verbose 2
+/control/verbose 0
+/tracking/verbose 0
+/run/numberOfThreads ${THREADS}
+/run/printProgress 100
+/icsd/analysis/setFileName ${FILENAME}
+/det/setGeom ${GEOMETRY}
+/det/setGeomMethod ${GEOMETRY_METHOD}
+/det/setDataDir output/csv
+EOF
+
+if [ ${VOXEL_VAL} != "0" ]; then
+cat >> ${MACRO_NAME} << EOF
+/det/setVoxelSize ${VOXEL_VAL} ${VOXEL_UNIT}
+EOF
+fi
+
+cat >> ${MACRO_NAME} << EOF
+/physics/setPhysics ${PHYSICS}
+/run/initialize
+EOF
+
+cat >> ${MACRO_NAME} << EOF
+/gun/particle ${PART_TYPE}
+EOF
+if [ "${PART_TYPE}" == "ion" ]; then
+    cat >> ${MACRO_NAME} << EOF
+    /gun/ion ${ION_Z} ${ION_A} ${ION_Q}
+EOF
+fi
+cat >> ${MACRO_NAME} << EOF
+/gun/energy ${ENERGY_VAL} ${ENERGY_UNIT}
+/run/beamOn ${BEAM_ON}
+EOF
+
+source ${GEANT4_ENV}
+chmod +x icsd
+mkdir -p output/root
+mkdir -p output/csv
+
+for csv_file in *.csv; do
+    if [ -f "$csv_file" ] && [ "$csv_file" != "geometry_benchmark.csv" ]; then
+        mv "$csv_file" output/csv/
+    fi
+done
+
+./icsd ${MACRO_NAME}
+
+if [ -f "geometry_benchmark.csv" ]; then
+    mv geometry_benchmark.csv "output/root/geometry_benchmark_${JOB_ID}.csv"
+fi
+
+rm ${MACRO_NAME}
+=== END OF FILE ===
+
+=== FILE: ./scripts/coords_parser.py ===
+# scripts/coords_parser.py
+from Bio.PDB import MMCIFParser
+import pathlib
+import pandas as pd
+
+def parse_cif_to_csv(pdb_id, cif_path, csv_path, skip_val=1, excluded_chains=None):
+    """
+    Parses a PDB CIF file and extracts atom coordinates into a standardized CSV.
+    Computes coordinates relative to the molecule's center of mass.
+    """
+    cif_path = pathlib.Path(cif_path)
+    csv_path = pathlib.Path(csv_path)
+    
+    if not cif_path.exists():
+        print(f"ERROR: CIF file {cif_path} does not exist!")
+        return False
+        
+    if csv_path.exists():
+        print(f"--> CSV file {csv_path} already exists. Skipping parsing.")
+        return True
+
+    # Ensure output directory exists
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if excluded_chains is None:
+        excluded_chains = set()
+
+    # QUIET=True suppresses minor PDB warnings
+    parser_obj = MMCIFParser(QUIET=True)
+    try:
+        structure = parser_obj.get_structure(pdb_id, str(cif_path))
+        atoms = []
+        average_x = average_y = average_z = 0.0
+        count = 0
+        uni_atoms = set()
+
+        # Step 1: Calculate center of mass (average coordinates)
+        for atom in structure.get_atoms():
+            coord = atom.get_coord()
+            average_x += coord[0]
+            average_y += coord[1]
+            average_z += coord[2]
+            count += 1
+
+        if count > 0:
+            average_x /= count
+            average_y /= count
+            average_z /= count
+
+        atom_counter = 0
+        domain_counter = 0
+        domain_max = 150
+        model = structure[0]
+
+        # Step 2: Extract atom properties
+        for chain in model:
+            chain_id = chain.get_id()
+            if chain_id in excluded_chains:
+                continue
+            
+            domain_id = 0
+            atom_inner_counter = 0
+            for residue in chain:
+                for atom in residue:
+                    element = atom.element
+                    # Clean up element name
+                    if len(element) > 1 and element not in ["CL", "MG", "FE", "ZN", "MN", "CA", "NA"]:
+                        element = element[0]
+                    
+                    coord = atom.get_coord()
+                    atoms.append([
+                        chain_id,
+                        domain_id,
+                        element,
+                        coord[0] - average_x,
+                        coord[1] - average_y,
+                        coord[2] - average_z
+                    ])
+                    uni_atoms.add(element)
+                    atom_inner_counter += 1
+                    atom_counter += 1
+
+                if atom_inner_counter >= domain_max:
+                    domain_id += 1
+                    domain_counter += 1
+                    atom_inner_counter = 0
+
+        print(f"===== Successfully parsed PDB: {pdb_id.upper()} =====")
+        print(f"Atoms: {atom_counter} | Domains: {domain_counter} | Center: ({average_x:.2f}, {average_y:.2f}, {average_z:.2f})")
+        
+        df_out = pd.DataFrame(atoms, columns=['chain_id', 'domain_id', 'element', 'x', 'y', 'z'])
+        
+        # Apply downsampling (skip factor) if defined
+        if skip_val > 1:
+            df_out = df_out.iloc[::skip_val]
+            print(f"--> Applied downsampling (skip={skip_val}). Remaining atoms: {len(df_out)}")
+            
+        df_out.to_csv(csv_path, index=False)
+        return True
+
+    except Exception as e:
+        print(f"ERROR: Failed to parse {pdb_id.upper()}: {e}")
+        return False=== END OF FILE ===
+
+=== FILE: ./scripts/config.py ===
+import pathlib
+
+# Корень проекта
+BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
+
+# Ван-дер-Ваальсовы радиусы по Сантьяго Альваресу (Dalton Trans., 2013, 42, 8617)
+# Значения взяты из Таблицы 1 статьи.
+radius_map = {
+    "H": 1.20,
+    "C": 1.77,
+    "N": 1.66,
+    "O": 1.50,
+    "F": 1.46,
+    "NA": 2.50,
+    "MG": 2.51,  # Magnesium
+    "P": 1.90,
+    "S": 1.89,
+    "CL": 1.82,  # Chlorine
+    "K": 2.73,
+    "CA": 2.62,
+    "MN": 2.45,  # Manganese
+    "FE": 2.44,
+    "CO": 2.40,
+    "NI": 2.40,
+    "CU": 2.38,
+    "ZN": 2.39,
+    "empty": 1.0
+}
+
+# Цветовая схема (общепринятая CPK + расширения)
+color_map = {
+    "H": "#FFFFFF",      # Белый
+    "C": "#909090",      # Серый (лучше, чем черный, на темном фоне Plotly)
+    "N": "#3050F8",      # Насыщенный синий
+    "O": "#FF0D0D",      # Красный
+    "P": "#FF8000",      # Оранжевый
+    "S": "#FFFF30",      # Желтый
+    "CL": "#1FF01F",     # Ярко-зеленый
+    "MG": "#8AFF00",     # Светло-зеленый
+    "MN": "#9C7AC7",     # Пурпурный
+    "ZN": "#7D80B0",     # Темно-сине-серый
+    "FE": "#E06633",     # Ржаво-оранжевый
+    "CA": "#808090",     # Кальций (часто встречается в PDB)
+    "NA": "#0000FF",     # Натрий
+    "K":  "#8F40D4",     # Калий
+    "empty": "#2F2F2F"   # Серый фон
+}
+
+molecules = {
+    "histone": {
+        "chain": {"I", "J"},
+        "cif": BASE_DIR / "input" / "cif" / "1kx5.cif",
+        "csv": BASE_DIR / "results" / "csv" / "1kx5.csv",
+        "skip": 1
+    },
+    "NMDA": {
+        # Для NMDA-рецептора (6WHT) цепи обычно A, B, C, D (гетеротетрамер)
+        "chain": {}, 
+        "cif": BASE_DIR / "input" / "cif" / "6WHT.cif",
+        "csv": BASE_DIR / "results" / "csv" / "6WHT.csv",
+        "skip": 5
+    },
+    "ribosome": {
+        # Рибосома (4V6X) очень большая, укажем основные цепи или оставим пустым для "all"
+        "chain": {}, 
+        "cif": BASE_DIR / "input" / "cif" / "4V6X.cif",
+        "csv": BASE_DIR / "results" / "csv" / "4V6X.csv",
+        "skip": 25 # Увеличил пропуск для производительности
+    },
+    "cytoskeleton": {
+        "chain": {},
+        "cif": BASE_DIR / "input" / "cif" / "7un1.cif",
+        "csv": BASE_DIR / "results" / "csv" / "7un1.csv",
+        "skip": 10
+    },
+}=== END OF FILE ===
+
+=== FILE: ./scripts/setup_venv.sh ===
+#!/bin/bash
+# ==============================================================================
+# setup_venv.sh
+# Manages the Python virtual environment directly in the project directory.
+# Installs and updates only primary dependencies defined in requirements.txt.
+# ==============================================================================
+
+set -e # Exit immediately on error
+
+# Resolve paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Source the unified global configuration (located one level up)
+if [ -f "${PROJECT_ROOT}/project_config.sh" ]; then
+    source "${PROJECT_ROOT}/project_config.sh"
+else
+    echo "ERROR: project_config.sh not found in ${PROJECT_ROOT}" >&2
+    exit 1
+fi
+
+echo "=== PYTHON ENVIRONMENT DEPLOYMENT (LOCAL PROJECT DIRECTORY) ==="
+echo "Project Name:    ${PROJECT_NAME}"
+echo "Local Venv:      ${LOCAL_VENV_DIR}"
+
+# 1. Determine if venv needs compilation/update
+NEEDS_COMPILE=false
+if [ ! -d "$LOCAL_VENV_DIR" ] || [ ! -f "$ACTIVATE_SCRIPT" ]; then
+    echo "--> Local venv not found. Initialization required."
+    NEEDS_COMPILE=true
+elif [ -f "$REQ_FILE" ] && [ -n "$(find "$REQ_FILE" -type f -newer "$ACTIVATE_SCRIPT" 2>/dev/null)" ]; then
+    echo "--> requirements.txt has been updated. Update required."
+    NEEDS_COMPILE=true
+fi
+
+# 2. Build or update python venv directly in the project folder
+if [ "$NEEDS_COMPILE" = true ]; then
+    if [ ! -d "$LOCAL_VENV_DIR" ]; then
+        echo "--> Creating virtual environment in ${LOCAL_VENV_DIR}..."
+        python3 -m venv "$LOCAL_VENV_DIR"
+    fi
+    
+    echo "--> Activating environment..."
+    source "$ACTIVATE_SCRIPT"
+    
+    echo "--> Upgrading pip..."
+    pip install --upgrade pip
+    
+    echo "--> Installing Python dependencies from ${REQ_FILE}..."
+    if [ -f "$REQ_FILE" ]; then
+        pip install -r "$REQ_FILE"
+    fi
+    
+    # Mark successful installation and update timestamps
+    touch "${LOCAL_VENV_DIR}/.requirements_installed"
+    touch "$ACTIVATE_SCRIPT"
+    echo "--> Virtual environment is ready to use."
+else
+    echo "--> Virtual environment is up-to-date. Skipping installation."
+fi=== END OF FILE ===
+
+=== FILE: ./scripts/visualize.py ===
+# visualize.py
+import numpy as np
+import pandas as pd
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+from config import *
+
+def visualize_molecules(output_name=BASE_DIR / "output" / "plots" / "Macromolecules Comparison.html"):
+    """
+    Creation of HTML file for 3D visualizing of specific molecules.
+    """
+    fig = make_subplots(rows=2, cols=2,
+                        specs=[[{'type': 'scene'}, {'type': 'scene'}],
+                            [{'type': 'scene'}, {'type': 'scene'}]],
+                        subplot_titles=tuple(molecules.keys()),
+                        horizontal_spacing=0.02,
+                        vertical_spacing=0.05
+    )
+    def draw_sphere(fig, row, col, rad, phi_init=0., phi_end=2*np.pi, theta_init=0, theta_end=np.pi, mesh=100, color='grey', opacity=0.2):
+        phi = np.linspace(phi_init, phi_end, mesh)
+        theta = np.linspace(theta_init, theta_end, mesh)
+        x_vol = rad*np.outer(np.sin(theta), np.cos(phi))
+        y_vol = rad*np.outer(np.sin(theta), np.sin(phi))
+        z_vol = rad*np.outer(np.cos(theta), np.ones(np.size(phi)))
+
+        fig.add_trace(
+            go.Surface(
+                x=x_vol, y=y_vol, z=z_vol,
+                opacity=0.2,
+                colorscale=[[0., color],[1., color]],
+                showscale=False,
+                hoverinfo='skip'
+            ),
+            row=row, col=col
+        )
+
+    def draw_tube(fig, row, col, r_in, r_out, height, phi_init=0., phi_end=2*np.pi, mesh=50, color='grey', opacity=0.2):
+        # 1. Параметры сетки
+        phi = np.linspace(0, 2*np.pi, mesh)
+        z_range = np.linspace(-height/2, height/2, mesh)
+        phi_grid, z_grid = np.meshgrid(phi, z_range)
+        
+        # --- А. ВНЕШНЯЯ СТЕНКА ---
+        x_out = r_out * np.cos(phi_grid)
+        y_out = r_out * np.sin(phi_grid)
+        fig.add_trace(go.Surface(
+            x=x_out, y=y_out, z=z_grid,
+            opacity=opacity, showscale=False, colorscale=[[0, color], [1, color]],
+            hoverinfo='skip'
+        ), row=row, col=col)
+
+        # --- Б. ВНУТРЕННЯЯ СТЕНКА ---
+        x_in = r_in * np.cos(phi_grid)
+        y_in = r_in * np.sin(phi_grid)
+        fig.add_trace(go.Surface(
+            x=x_in, y=y_in, z=z_grid,
+            opacity=opacity, showscale=False, colorscale=[[0, color], [1, color]],
+            hoverinfo='skip'
+        ), row=row, col=col)
+
+        # --- В. ТОРЦЫ (ВЕРХНЕЕ И НИЖНЕЕ КОЛЬЦО) ---
+        # Для колец нам нужно варьировать РАДИУС от r_in до r_out
+        r_range = np.linspace(r_in, r_out, mesh//2)
+        # Сетка: угол и радиус
+        phi_cap, r_cap = np.meshgrid(phi, r_range)
+        
+        x_cap = r_cap * np.cos(phi_cap)
+        y_cap = r_cap * np.sin(phi_cap)
+        
+        # Верхняя крышка (z = +height/2)
+        fig.add_trace(go.Surface(
+            x=x_cap, y=y_cap, z=np.full_like(x_cap, height/2),
+            opacity=opacity, showscale=False, colorscale=[[0, color], [1, color]],
+            hoverinfo='skip'
+        ), row=row, col=col)
+
+        # Нижняя крышка (z = -height/2)
+        fig.add_trace(go.Surface(
+            x=x_cap, y=y_cap, z=np.full_like(x_cap, -height/2),
+            opacity=opacity, showscale=False, colorscale=[[0, color], [1, color]],
+            hoverinfo='skip'
+        ), 
+        row=row, col=col)
+
+    def create_molecule(row, col, name):
+        try:
+            df = pd.read_csv(molecules[name]["csv"])
+            df = df.iloc[::molecules[name]["skip"]]
+        except Exception as e:
+            print(f"Error at reading CSV file: {e}")
+            return
+        x = df["x"]; y = df["y"]; z = df["z"]
+        colors = df['element'].map(color_map).fillna("black")
+        radius = df['element'].map(radius_map).fillna(0.5)*3
+        volume = name
+
+        fig.add_trace(
+            go.Scatter3d(
+                x=x, y=y, z=z,
+                mode="markers",
+                marker=dict(
+                    size=radius,
+                    sizemode="diameter",
+                    opacity=1.,
+                    color=colors,
+                    line=dict(width=1, color="black")
+                ),
+                name=f"Pict.{row}.{col}"
+            ),
+            row=row, col=col
+        )
+
+        
+        if (volume == "histone"):
+            rad = 25
+            draw_sphere(fig, row, col, rad)
+
+        if (volume == "NMDA"):
+            h = 180
+            rad = 40
+            draw_tube(fig, row, col, 0., rad, h)
+
+        if (volume == "ribosome"):
+            rad = 125
+            draw_sphere(fig, row, col, rad)
+
+        if (volume == "cytoskeleton"):
+            h = 180
+            rad_min = 75
+            rad_max = 125
+            draw_tube(fig, row, col, rad_min, rad_max, h)
+    
+    for i in range(len(molecules.keys())):
+        print(i//2+1, i%2+1)
+        create_molecule(i//2+1, i%2+1, list(molecules.keys())[i])
+
+    fig.update_scenes(
+        xaxis=dict(
+            visible=False, # Полностью скрывает ось, сетку и числа
+            showgrid=False, 
+            zeroline=False, 
+            showbackground=False
+        ),
+        yaxis=dict(visible=False),
+        zaxis=dict(visible=False),
+        # Улучшаем освещение для "дорогого" вида
+        annotations=[] 
+    )
+
+    # Убираем внешние поля фигуры
+    fig.update_layout(
+        title={
+            'text': "Macromolecules comparison (Geant4-DNA Validation)",
+            'y': 0.98,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'
+        },
+        margin=dict(l=0, r=0, t=0, b=0), # Минимальные отступы
+        showlegend=False,
+        autosize=True,
+        template="plotly_dark",
+        paper_bgcolor='black' # Цвет "бумаги" вокруг графиков
+    )
+
+    fig.write_html(output_name)
+    print(f"File {output_name} was created succsefully!")=== END OF FILE ===
+
+=== FILE: ./scripts/compile_fast.sh ===
+#!/bin/bash
+# ==============================================================================
+# compile_fast.sh
+# Fast compilation script for CMake/Geant4 projects using local /tmp space.
+# Uses project_config.sh for global project variables.
+# ==============================================================================
+
+set -e # Exit immediately on error
+
+# Source the unified global configuration (located one level up)
+source "$(dirname "${BASH_SOURCE[0]}")/../project_config.sh"
+
+NUM_CORES=$(nproc 2>/dev/null || echo 4)
+
+echo "=== C++ GEANT4 COMPILATION IN /tmp ==="
+echo "Project Name:    ${PROJECT_NAME}"
+echo "Source Dir:      ${PROJECT_ROOT}"
+echo "Temp Build:      ${TEMP_BUILD_DIR}"
+
+# Check for code/config updates since last compilation
+NEEDS_COMPILE=false
+TARGET_BINARY="${LOCAL_BUILD_DIR}/${BINARY_NAME}"
+
+if [ ! -f "${TARGET_BINARY}" ]; then
+    NEEDS_COMPILE=true
+else
+    MONITOR_PATHS=""
+    for path in "src" "include" "CMakeLists.txt"; do
+        if [ -e "${PROJECT_ROOT}/${path}" ]; then
+            MONITOR_PATHS="${MONITOR_PATHS} ${PROJECT_ROOT}/${path}"
+        fi
+    done
+    if [ -n "$(find ${MONITOR_PATHS} -type f -newer "${TARGET_BINARY}" 2>/dev/null)" ]; then
+        NEEDS_COMPILE=true
+    fi
+fi
+
+if [ "$NEEDS_COMPILE" = false ]; then
+    echo "--> No changes detected. C++ binary is up-to-date."
+    exit 0
+fi
+
+# Load Geant4 environment
+if [ -f "$GEANT4_ENV" ]; then
+    echo "--> Loading Geant4 environment..."
+    source "$GEANT4_ENV"
+fi
+
+mkdir -p "$TEMP_BUILD_DIR"
+
+cd "$TEMP_BUILD_DIR"
+echo "--> Running CMake..."
+cmake -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" "${PROJECT_ROOT}"
+
+echo "--> Compiling with ${NUM_CORES} threads..."
+make -j"${NUM_CORES}"
+
+echo "--> Copying C++ binary back to project..."
+if [ -f "${BINARY_NAME}" ]; then
+    cp -f "${BINARY_NAME}" "${PROJECT_ROOT}/"
+else
+    echo "ERROR: Compiled binary not found!" >&2
+    exit 1
+fi
+
+echo "=== C++ COMPILATION COMPLETED SUCCESSFULLY ==="
+=== END OF FILE ===
+
+=== FILE: ./scripts/main.py ===
+# scripts/main.py
+import os
+import sys
+import urllib.request
+import pathlib
+
+# Import project configurations
+from config import BASE_DIR, molecules
+from coords_parser import parse_cif_to_csv
+
+# Analytical geometries inside Geant4 that do not require PDB datasets
+PREDEFINED_GEOMETRIES = {"ptb", "startrack", "cytoskeleton", "ribosome", "nmda", "histone"}
+
+def download_cif_from_rcsb(pdb_id, destination_path):
+    """
+    Downloads a CIF file directly from the RCSB Protein Data Bank.
+    """
+    pdb_id = pdb_id.lower()
+    url = f"https://files.rcsb.org/download/{pdb_id}.cif"
+    try:
+        print(f"--> Downloading {pdb_id.upper()} from RCSB PDB ({url})...")
+        urllib.request.urlretrieve(url, destination_path)
+        print(f"--> Successfully downloaded to {destination_path}")
+        return True
+    except Exception as e:
+        print(f"ERROR: Failed to download {pdb_id.upper()} from RCSB PDB: {e}")
+        return False
+
+def get_geometries_from_parameters(parameters_path):
+    """
+    Extracts unique target geometries from the 9th column of parameters.txt.
+    """
+    geometries = set()
+    if not os.path.exists(parameters_path):
+        print(f"WARNING: Parameters file not found at {parameters_path}")
+        return geometries
+
+    with open(parameters_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # Split CSV parameter line
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 9:
+                geometries.add(parts[8]) # 9th column is the geometry/target name
+    return geometries
+
+def main():
+    parameters_path = BASE_DIR / "parameters.txt"
+    cif_dir = BASE_DIR / "input" / "cif"
+    csv_dir = BASE_DIR / "output" / "csv"
+
+    # Ensure vital directories exist
+    cif_dir.mkdir(parents=True, exist_ok=True)
+    csv_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Read required target geometries from parameters.txt at runtime
+    required_geoms = get_geometries_from_parameters(parameters_path)
+    print(f"--> Required geometries detected in parameters.txt: {required_geoms}")
+
+    # 2. Process each required geometry
+    for geom in required_geoms:
+        geom_lower = geom.lower()
+        
+        # Skip analytical target models built natively by Geant4
+        if geom_lower in PREDEFINED_GEOMETRIES:
+            print(f"--> Geometry '{geom}' is analytical/predefined. Skipping preprocessing.")
+            continue
+
+        pdb_id = geom_lower
+        skip_val = 1
+        excluded_chains = set()
+
+        # Check if the PDB target matches any configuration in config.py
+        # If matched, we override default skip factors and excluded chains
+        matched_config = None
+        for key, val in molecules.items():
+            config_pdb_id = pathlib.Path(val["cif"]).stem.lower()
+            if geom_lower == config_pdb_id or geom_lower == key.lower():
+                matched_config = val
+                pdb_id = config_pdb_id
+                skip_val = val.get("skip", 1)
+                excluded_chains = val.get("chain", set())
+                break
+
+        cif_path = cif_dir / f"{pdb_id}.cif"
+        csv_path = csv_dir / f"{pdb_id}.csv"
+
+        # 3. Skip if the CSV has already been generated
+        if csv_path.exists():
+            print(f"--> CSV for PDB '{pdb_id.upper()}' is already up-to-date.")
+            continue
+
+        # 4. Check if CIF is present; if not -> download from RCSB PDB automatically
+        if not cif_path.exists():
+            success = download_cif_from_rcsb(pdb_id, cif_path)
+            if not success:
+                print(f"ERROR: Failed to obtain CIF for '{pdb_id.upper()}'. Skipping.")
+                continue
+
+        # 5. Convert CIF to CSV
+        parse_cif_to_csv(pdb_id, cif_path, csv_path, skip_val, excluded_chains)
+
+if __name__ == "__main__":
+    main()=== END OF FILE ===
+
+=== FILE: ./CMakeLists.txt ===
+#----------------------------------------------------------------------------
+# Setup the project
+cmake_minimum_required(VERSION 3.16...3.27)
+project(icsd)
+
+#----------------------------------------------------------------------------
+# Find Geant4 package, activating all available UI and Vis drivers by default
+# You can set WITH_GEANT4_UIVIS to OFF via the command line or ccmake/cmake-gui
+# to build a batch mode only executable
+#
+option(WITH_GEANT4_UIVIS "Build example with Geant4 UI and Vis drivers" ON)
+if(WITH_GEANT4_UIVIS)
+  find_package(Geant4 REQUIRED ui_all vis_all)
+else()
+  find_package(Geant4 REQUIRED)
+endif()
+
+#----------------------------------------------------------------------------
+# Setup Geant4 include directories and compile definitions
+#
+include(${Geant4_USE_FILE})
+
+#----------------------------------------------------------------------------
+# Locate sources and headers for this project
+#
+include_directories(${PROJECT_SOURCE_DIR}/include 
+                    ${Geant4_INCLUDE_DIR})
+file(GLOB sources ${PROJECT_SOURCE_DIR}/src/*.cc)
+file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh)
+
+#----------------------------------------------------------------------------
+# Add the executable, and link it to the Geant4 libraries
+#
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -g")
+
+add_executable(icsd icsd.cc ${sources} ${headers})
+target_link_libraries(icsd ${Geant4_LIBRARIES} )
+
+#----------------------------------------------------------------------------
+# Copy all scripts to the build directory, i.e. the directory in which we
+# build DNA_appli. This is so that we can run the executable directly because it
+# relies on these scripts being in the current working directory.
+#
+set(icsd_SCRIPTS
+    icsd.mac vis.mac plot.C run_geant4.sh run.sh submit.sub parameters.txt
+  )
+file(COPY ${PROJECT_SOURCE_DIR}/icsd.mac DESTINATION ${PROJECT_BINARY_DIR})
+file(COPY ${PROJECT_SOURCE_DIR}/vis.mac DESTINATION ${PROJECT_BINARY_DIR})
+
+#----------------------------------------------------------------------------
+# Install the executable to 'bin' directory under CMAKE_INSTALL_PREFIX
+#
+install(TARGETS icsd DESTINATION bin)
+
+=== END OF FILE ===
+
+=== FILE: ./project_config.sh ===
+# ==============================================================================
+# project_config.sh
+# GLOBAL CONFIGURATION FILE - MODIFY ONLY THIS FILE TO PORT TO OTHER PROJECTS!
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. USER-DEFINED SETTINGS (Modify these when reusing scripts for other projects)
+# ------------------------------------------------------------------------------
+PROJECT_NAME="icsd_pdb"                               # Project name/identifier
+BINARY_NAME="icsd"                                    # C++ executable target name
+BUILD_TYPE="Release"                                  # CMAKE_BUILD_TYPE (Release / Debug)
+export GEANT4_ENV="/home/users/mvologzhin/programms/geant4-dev/install/bin/geant4.sh" # Path to Geant4 env
+
+# ------------------------------------------------------------------------------
+# 2. AUTOMATIC PATH RESOLUTION (Do not modify unless changing folder layout)
+# ------------------------------------------------------------------------------
+# Dynamically find the directory containing this config file (project root)
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Local project folders
+LOCAL_VENV_DIR="${PROJECT_ROOT}/.venv"
+REQ_FILE="${PROJECT_ROOT}/requirements.txt"
+ACTIVATE_SCRIPT="${LOCAL_VENV_DIR}/bin/activate"
+
+# Fast local SSD temporary folder for C++ compilation only
+TEMP_BUILD_DIR="/tmp/${USER}_build_${PROJECT_NAME}"=== END OF FILE ===
+
+=== FILE: ./requirements.txt ===
+biopython>=1.81
+numpy>=1.24.0
+pandas>=2.0.0
+plotly>=5.15.0=== END OF FILE ===
+
+=== FILE: ./parameters.txt ===
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 1kx5, VOXEL, 10, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 1kx5, VOXEL, 5, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 1kx5, VOXEL, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 1kx5, BOOLEAN, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, Histone, PREDEFINED, 0, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 4v6x, VOXEL, 10, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 4v6x, VOXEL, 5, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 4v6x, VOXEL, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 4v6x, BOOLEAN, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, Ribosome, PREDEFINED, 0, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 7un1, VOXEL, 10, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 7un1, VOXEL, 5, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 7un1, VOXEL, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 7un1, BOOLEAN, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, Cytoskeleton, PREDEFINED, 0, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 6wht, VOXEL, 10, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 6wht, VOXEL, 5, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 6wht, VOXEL, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, 6wht, BOOLEAN, 1, angstrom, 4, 6GB, 10GB
+G4EmDNAPhysics_option4, ion, 1, 1, 1, 1, MeV, 1, NMDA, PREDEFINED, 0, angstrom, 4, 6GB, 10GB=== END OF FILE ===
+
+=== FILE: ./analysis.sh ===
+#!/bin/bash
+# ==============================================================================
+# analysis.sh
+# Script for sequential batch execution of ROOT macros (.C) without a GUI.
+# ==============================================================================
+
+set -e # Exit immediately if a command exits with a non-zero status
+
+# 1. Import global project configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/project_config.sh" ]; then
+    source "${SCRIPT_DIR}/project_config.sh"
+else
+    echo "ERROR: project_config.sh not found!" >&2
+    exit 1
+fi
+
+# 2. List of ROOT macros located in scripts/root/ to be executed sequentially
+MACROS=(
+    #"plotGeometryComparison.C"
+    "plotGeometryComparisonTime.C"
+    #"plotTimeComparison.C"
+    #"plotValidation.C"
+)
+
+echo "--> Merging geometry benchmark CSV files..."
+BENCHMARK_DIR="${PROJECT_ROOT}/output/root"
+MERGED_FILE="${PROJECT_ROOT}/output/csv/geometry_benchmark_all.csv"
+
+# Write the CSV header first
+echo "GeomType,Method,VoxelSize_A,Time_s" > "$MERGED_FILE"
+
+# Append data from all individual benchmark files (suppressing error if none exist)
+if ls ${BENCHMARK_DIR}/geometry_benchmark_*.csv 1>/dev/null 2>&1; then
+    cat ${BENCHMARK_DIR}/geometry_benchmark_*.csv >> "$MERGED_FILE"
+    echo "--> Successfully merged benchmark data into ${MERGED_FILE}"
+else
+    echo "WARNING: No individual geometry benchmark files found in ${BENCHMARK_DIR}"
+fi
+
+echo "=== RUNNING ROOT DATA ANALYSIS ==="
+
+# 3. Verify ROOT availability in the system PATH
+if ! command -v root >/dev/null 2>&1; then
+    echo "ERROR: ROOT is not found in your PATH." >&2
+    echo "Please source your ROOT environment first (e.g., source /path/to/root/bin/thisroot.sh)." >&2
+    exit 1
+fi
+
+# Load Geant4 environment in case macros rely on Geant4 shared libraries
+if [ -f "$GEANT4_ENV" ]; then
+    source "$GEANT4_ENV"
+fi
+
+# 4. Sequential execution of macros
+for macro in "${MACROS[@]}"; do
+    # Absolute path to the macro inside scripts/root/
+    MACRO_PATH="${PROJECT_ROOT}/scripts/root/${macro}"
+
+    if [ -f "$MACRO_PATH" ]; then
+        echo "--> Running ROOT macro: ${macro}..."
+        # ROOT Command Line Options:
+        # -b : Run in batch mode (without rendering graphical GUI windows)
+        # -l : Do not show the welcome splash screen
+        # -q : Exit immediately after executing the macro
+        root -l -b -q "${MACRO_PATH}"
+        echo "--> Finished executing ${macro}"
+    else
+        echo "WARNING: Macro file '${macro}' not found at ${MACRO_PATH}. Skipping." >&2
+    fi
+done
+
+echo "=== ANALYSIS COMPLETED SUCCESSFULLY ==="=== END OF FILE ===
+
+=== FILE: ./include/DetectorMessenger.hh ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file DetectorMessenger.hh
+/// \brief Definition of the DetectorMessenger class
+
+#ifndef DetectorMessenger_h
+#define DetectorMessenger_h 1
+
+#include "G4UImessenger.hh"
+#include "globals.hh"
+
+class DetectorConstruction;
+class G4UIdirectory;
+class G4UIcommand;
+class G4UIcmdWithAString;
+class G4UIcmdWithADouble;
+class G4UIcmdWithADoubleAndUnit;
+
+class DetectorMessenger : public G4UImessenger
+{
+  public:
+    DetectorMessenger(DetectorConstruction*);
+    ~DetectorMessenger() override = default;
+
+    virtual void SetNewValue(G4UIcommand*, G4String) override;
+
+  private:
+    DetectorConstruction* fDetector = nullptr;
+    G4UIdirectory* fpDetDir = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpDiameterCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpVoxelSizeCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpHeightCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit* fpDensityCmd = nullptr;
+    G4UIcmdWithADouble* fpEfficiencyCmd = nullptr;
+    G4UIcmdWithAString* fGeomCmd = nullptr;
+    G4UIcmdWithAString* fGeomMethodCmd = nullptr;
+    G4UIcmdWithAString* fDataDirCmd = nullptr;
+};
+
+#endif
+=== END OF FILE ===
+
+=== FILE: ./include/StackingAction.hh ===
+#pragma once
+
+#include "G4UserStackingAction.hh"
+
+class StackingAction : public G4UserStackingAction{
+    public:
+        StackingAction();
+        ~StackingAction() override;
+        virtual G4ClassificationOfNewTrack ClassifyNewTrack(const G4Track* track) override;
+};=== END OF FILE ===
+
+=== FILE: ./include/PrimaryGeneratorAction.hh ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file PrimaryGeneratorAction.hh
+/// \brief Definition of the PrimaryGeneratorAction class
+
+#ifndef PrimaryGeneratorAction_h
+#define PrimaryGeneratorAction_h 1
+
+#include "G4ParticleGun.hh"
+#include "G4VUserPrimaryGeneratorAction.hh"
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
+
+class PrimaryGeneratorAction : public G4VUserPrimaryGeneratorAction
+{
+  public:
+    PrimaryGeneratorAction();
+    ~PrimaryGeneratorAction();
+
+    virtual void GeneratePrimaries(G4Event*);
+    
+    const G4ParticleGun* GetParticleGun() const {return fpParticleGun;};
+
+  private:
+    G4ParticleGun* fpParticleGun;
+};
+#endif
+=== END OF FILE ===
+
+=== FILE: ./include/DetectorConstruction.hh ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+/// \file DetectorConstruction.hh
+/// \brief Definition of the DetectorConstruction class
+
+#ifndef DetectorConstruction_h
+#define DetectorConstruction_h 1
+
+#include "G4Box.hh"
+#include "G4LogicalVolume.hh"
+#include "G4LogicalVolumeStore.hh"
+#include "G4Material.hh"
+#include "G4NistManager.hh"
+#include "G4PVPlacement.hh"
+#include "G4PhysicalVolumeStore.hh"
+#include "G4SolidStore.hh"
+#include "G4Sphere.hh"
+#include "G4Tubs.hh"
+#include "G4UserLimits.hh"
+#include "G4VPhysicalVolume.hh"
+#include "G4VUserDetectorConstruction.hh"
+#include "G4VisAttributes.hh"
+
+#include <unordered_map>
+
+enum class GeometryMethod {
+		VOXEL,
+		BOOLEAN,
+		PREDEFINED,
+		UNKNOWN
+};
+
+class DetectorMessenger;
+
+class DetectorConstruction : public G4VUserDetectorConstruction
+{
+  public:
+    DetectorConstruction();
+    virtual ~DetectorConstruction();
+
+    virtual G4VPhysicalVolume* Construct();
+    void SetGeometry(const G4String&);
+    void SetGeometryMethod(const G4String&);
+    void SetDiameter(G4double val);
+    void SetVoxelSize(G4double val);
+    void SetHeight(G4double val);
+    void SetEfficiency(G4double val);
+    void SetDensity(G4double val);
+    void SetDataDir(const G4String& val);
+    void LoadRadii();
+
+    G4double GetEfficiency() const {return fEfficiency;}
+    G4String GetDetectorName() const {return fGeomType;}
+
+  private:
+    G4double fWorldSize = 0;
+    G4VPhysicalVolume* fpPhysiWorld = nullptr;
+    G4LogicalVolume* fpLogicWorld = nullptr;
+    G4Box* fpSolidWorld = nullptr;
+    G4Material* fpWaterMaterial = nullptr;
+    G4Material* fpWorldMaterial = nullptr;
+    G4Material* fpTHFMaterial = nullptr;
+    G4Material* fpN2Material = nullptr;
+    
+    GeometryMethod fGeometryMethod;
+
+    G4String fGeomType, fDataDir;
+
+    G4double fEfficiency;
+    G4double fVoxelSize;
+    G4double fWaterDensity, fWorldDensity;
+    G4double fHeight, fDiameter, fInnerRadius, fOuterRadius;
+
+    std::map<G4String, G4double> fRadiiMap;
+
+    void DefineMaterials();
+    void BuildVoxelGeometry();
+    void BuildBooleanGeometry();
+    void BuildPredefinedGeometry();
+    G4VPhysicalVolume* ConstructDetector();
+
+    DetectorMessenger* fDetectorMessenger;
+};
+#endif
+=== END OF FILE ===
+
+=== FILE: ./include/ActionInitialization.hh ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file ActionInitialization.hh
+/// \brief Definition of the ActionInitialization class
+
+#ifndef ActionInitialization_h
+#define ActionInitialization_h 1
+
+#include "G4VUserActionInitialization.hh"
+
+class ActionInitialization : public G4VUserActionInitialization
+{
+  public:
+    ActionInitialization();
+    virtual ~ActionInitialization();
+
+    virtual void BuildForMaster() const;
+    virtual void Build() const;
+
+  private:
+};
+
+#endif
+=== END OF FILE ===
+
+=== FILE: ./include/SteppingAction.hh ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file SteppingAction.hh
+/// \brief Definition of the SteppingAction class
+
+#ifndef SteppingAction_h
+#define SteppingAction_h 1
+
+#include "G4UserSteppingAction.hh"
+
+class RunAction;
+class EventAction;
+class DetectorConstruction;
+class PrimaryGeneratorAction;
+
+class SteppingAction : public G4UserSteppingAction
+{
+  public:
+    SteppingAction(EventAction*);
+    ~SteppingAction();
+
+    virtual void UserSteppingAction(const G4Step*);
+
+  private:
+    EventAction* fpEventaction;
+};
+#endif
+=== END OF FILE ===
+
+=== FILE: ./include/RunMessenger.hh ===
+#pragma once
+
+#include "RunAction.hh"
+#include "G4UImessenger.hh"
+#include "globals.hh"
+
+class G4UIcommand;
+class G4UIdirectory;
+class G4UIcmdWithAString;
+class RunAction;
+
+class RunMessenger : public G4UImessenger {
+    public:
+        RunMessenger(RunAction* pRunAction);
+        ~RunMessenger() override;
+
+        void SetNewValue(G4UIcommand* command, G4String newValue) override;
+
+    private:
+        RunAction* fpRunAction;
+        G4UIdirectory* fpDirectory;
+        G4UIcmdWithAString* fpFileNameCmd;
+};=== END OF FILE ===
+
+=== FILE: ./include/PhysicsList.hh ===
+#pragma once
+
+#include <G4UIcommand.hh>
+#include <G4UIcmdWithAString.hh>
+#include <G4UImessenger.hh>
+#include <G4UIdirectory.hh>
+#include <G4VModularPhysicsList.hh>
+
+class G4VPhysicsConstructor;
+
+class PhysicsList : public G4VModularPhysicsList, public G4UImessenger{
+public:
+	explicit PhysicsList();
+	~PhysicsList() override = default;
+	
+	void SetNewValue(G4UIcommand* command, G4String value) override;
+
+	void RegisterPhysicsConstructor(const G4String& name);
+	
+	G4String GetPhysicsListName() const {return fPhysName;};
+	
+private:
+	G4VPhysicsConstructor* fpEmPhysicsList = nullptr;
+	G4String fPhysName;
+	G4UIdirectory* fpPhysDir;
+
+	G4UIcmdWithAString* fpPhysicsUI = nullptr;
+};
+=== END OF FILE ===
+
+=== FILE: ./include/RunAction.hh ===
+#pragma once
+
+#include "G4UserRunAction.hh"
+#include "G4RunManager.hh"
+
+#include "globals.hh"
+
+class RunMessenger;
+
+class RunAction : public G4UserRunAction
+{
+  public:
+    RunAction();
+    virtual ~RunAction();
+    virtual void BeginOfRunAction(const G4Run*);
+    virtual void EndOfRunAction(const G4Run*);
+
+    void SetOutputFileName(const G4String& name){fFileName = name;};
+
+  private:
+    G4String fFileName;
+    RunMessenger* fpMessenger;
+};
+=== END OF FILE ===
+
+=== FILE: ./include/EventAction.hh ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file EventAction.hh
+/// \brief Definition of the EventAction class
+
+#ifndef EventAction_h
+#define EventAction_h 1
+
+#include "G4UserEventAction.hh"
+#include "globals.hh"
+
+class RunAction;
+
+class EventAction : public G4UserEventAction
+{
+  public:
+    EventAction();
+    ~EventAction();
+
+    virtual void BeginOfEventAction(const G4Event*);
+    virtual void EndOfEventAction(const G4Event*);
+
+    G4int GetEventIn() const { return fEventIn; }
+    void AddEventIn(G4int value) { fEventIn += value; }
+    void AddElectronEventIn(G4int value) { fElectronEventIn += value; }
+    void AddIonEventIn(G4int value) { fIonEventIn += value; }
+
+  private:
+    G4int fEventIn;
+    G4int fElectronEventIn;
+    G4int fIonEventIn;
+};
+
+#endif
+=== END OF FILE ===
+
+=== FILE: ./src/RunAction.cc ===
+#include "RunAction.hh"
+#include "RunMessenger.hh"
+
+#include "G4RunManager.hh"
+#include "G4AnalysisManager.hh"
+#include "G4ParticleGun.hh"
+#include "G4UnitsTable.hh"
+#include "G4EmParameters.hh"
+
+#include <filesystem>
+
+RunAction::RunAction() : G4UserRunAction(), fFileName("output"){
+    fpMessenger = new RunMessenger(this);
+        
+    auto analysisManager = G4AnalysisManager::Instance();
+
+    analysisManager->SetDefaultFileType("root");
+    analysisManager->SetNtupleMerging(true); 
+    analysisManager->SetVerboseLevel(1);
+
+    // --- Ntuple 1 ---
+    analysisManager->SetFirstNtupleId(1);
+    analysisManager->CreateNtuple("ntuple_1", "ICSD");
+    analysisManager->CreateNtupleDColumn(1, "ionisations");
+    analysisManager->CreateNtupleDColumn(1, "ionIonisations");
+    analysisManager->CreateNtupleDColumn(1, "electronIonisations");
+    analysisManager->CreateNtupleDColumn(1, "multipleIonisations");
+    analysisManager->FinishNtuple(1);
+
+    // --- Ntuple 2 ---
+    analysisManager->CreateNtuple("ntuple_2", "physics");
+    analysisManager->CreateNtupleDColumn(2, "EventID");
+    analysisManager->CreateNtupleDColumn(2, "flagProcess");
+    analysisManager->CreateNtupleDColumn(2, "x");
+    analysisManager->CreateNtupleDColumn(2, "y");
+    analysisManager->CreateNtupleDColumn(2, "z");
+    analysisManager->CreateNtupleDColumn(2, "totalEnergyDeposit");
+    analysisManager->FinishNtuple(2);
+
+    // --- Ntuple 3 ---
+    analysisManager->CreateNtuple("ntuple_3", "multipleionisations");
+    analysisManager->CreateNtupleDColumn(3, "multipleIonisations");
+    analysisManager->FinishNtuple(3);
+
+    analysisManager->SetActivation(true);
+}
+
+RunAction::~RunAction(){
+    delete fpMessenger;
+}
+
+void RunAction::BeginOfRunAction(const G4Run* run){
+    auto analysisManager = G4AnalysisManager::Instance();
+    
+    std::filesystem::path filePath(fFileName.c_str());
+    if (filePath.has_parent_path()){
+        std::filesystem::create_directories(filePath.parent_path());
+    }
+
+    analysisManager->SetFileName(fFileName);
+    analysisManager->OpenFile();
+}
+
+void RunAction::EndOfRunAction(const G4Run*){
+    //G4EmParameters* pDNAParams = G4EmParameters::Instance();
+    //G4bool isMultipleIonisation = pDNAParams->DNAMultipleIonisation();
+    auto analysisManager = G4AnalysisManager::Instance();
+    
+    analysisManager->Write();
+    analysisManager->CloseFile();
+}
+=== END OF FILE ===
+
+=== FILE: ./src/StackingAction.cc ===
+#include "StackingAction.hh"
+#include "G4Track.hh"
+#include "G4Gamma.hh"
+
+StackingAction::StackingAction() : G4UserStackingAction()
+{};
+
+StackingAction::~StackingAction()
+{};
+
+G4ClassificationOfNewTrack StackingAction::ClassifyNewTrack(const G4Track* track){
+    if (track->GetDefinition() == G4Gamma::GammaDefinition() && track->GetParentID() > 0){
+        return fKill;
+    }
+    return fUrgent;
+}=== END OF FILE ===
+
+=== FILE: ./src/DetectorMessenger.cc ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file DetectorMessenger.cc
+/// \brief Implementation of the DetectorMessenger class
+
+#include "DetectorMessenger.hh"
+
+#include "DetectorConstruction.hh"
+
+#include "G4UIcmdWithAString.hh"
+#include "G4UIcmdWithADouble.hh"
+#include "G4UIcmdWithADoubleAndUnit.hh"
+#include "G4UIcommand.hh"
+#include "G4UIdirectory.hh"
+#include "G4UIparameter.hh"
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+DetectorMessenger::DetectorMessenger(DetectorConstruction* Det) : G4UImessenger(), fDetector(Det)
+{
+  fpDetDir = new G4UIdirectory("/det/");
+  fpDetDir->SetGuidance("Control detector parameters");
+
+  fpDiameterCmd = new G4UIcmdWithADoubleAndUnit("/det/setDiameter", this);
+  fpDiameterCmd->SetGuidance("Set detector diameter");
+  fpDiameterCmd->SetParameterName("Diameter", false);
+  fpDiameterCmd->SetRange("Diameter>.0");
+  fpDiameterCmd->SetUnitCategory("Length");
+
+  fpVoxelSizeCmd = new G4UIcmdWithADoubleAndUnit("/det/setVoxelSize", this);
+  fpVoxelSizeCmd->SetGuidance("Set voxel size");
+  fpVoxelSizeCmd->SetParameterName("VoxelSize", false);
+  fpVoxelSizeCmd->SetRange("VoxelSize>.0");
+  fpVoxelSizeCmd->SetUnitCategory("Length");
+
+  fpHeightCmd = new G4UIcmdWithADoubleAndUnit("/det/setHeight", this);
+  fpHeightCmd->SetGuidance("Set detector height");
+  fpHeightCmd->SetParameterName("Height", false);
+  fpHeightCmd->SetRange("Height>0.");
+  fpHeightCmd->SetUnitCategory("Length");
+
+  fpDensityCmd = new G4UIcmdWithADoubleAndUnit("/det/setDensity", this);
+  fpDensityCmd->SetGuidance("Set detector Density");
+  fpDensityCmd->SetParameterName("Density", false);
+  fpDensityCmd->SetRange("Density>0.");
+  fpDensityCmd->SetUnitCategory("Volumic Mass");
+
+  fpEfficiencyCmd = new G4UIcmdWithADouble("/det/setEfficiency", this);
+  fpEfficiencyCmd->SetGuidance("Set detector efficiency");
+  fpEfficiencyCmd->SetParameterName("Efficiency", false);
+  fpEfficiencyCmd->SetRange("Efficiency>=0. && Efficiency<=1.");
+
+  fGeomCmd = new G4UIcmdWithAString("/det/setGeom", this);
+  fGeomCmd->SetGuidance("Select the geometry: PTB/StarTrack/Cytoskeleton/Ribosome/NMDA/Histone,");
+  fGeomCmd->SetParameterName("choice", false);
+  fGeomCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+  fGeomCmd->SetToBeBroadcasted(false);
+  
+  fGeomMethodCmd = new G4UIcmdWithAString("/det/setGeomMethod", this);
+  fGeomMethodCmd->SetGuidance("Select the geometry construction method: VOXEL | BOOLEAN | PREDEFINED");
+  fGeomMethodCmd->SetCandidates("VOXEL BOOLEAN PREDEFINED");
+  fGeomMethodCmd->SetParameterName("choice", false);
+  fGeomMethodCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+  fGeomMethodCmd->SetToBeBroadcasted(false);
+
+  fDataDirCmd = new G4UIcmdWithAString("/det/setDataDir", this);
+  fDataDirCmd->SetGuidance("Set directory containing geometry CSV files.");
+  fDataDirCmd->SetParameterName("dataDir", false);
+  fDataDirCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void DetectorMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
+{
+  if (command == fGeomCmd) fDetector->SetGeometry(newValue);
+  if (command == fpDiameterCmd) fDetector->SetDiameter(fpDiameterCmd->GetNewDoubleValue(newValue));
+  if (command == fpVoxelSizeCmd) fDetector->SetVoxelSize(fpVoxelSizeCmd->GetNewDoubleValue(newValue));
+  if (command == fpHeightCmd) fDetector->SetHeight(fpHeightCmd->GetNewDoubleValue(newValue));
+  if (command == fpDensityCmd) fDetector->SetDensity(fpDensityCmd->GetNewDoubleValue(newValue));
+  if (command == fpEfficiencyCmd) fDetector->SetEfficiency(fpEfficiencyCmd->GetNewDoubleValue(newValue));
+  if (command == fGeomMethodCmd) fDetector->SetGeometryMethod(newValue);
+  if (command == fDataDirCmd) fDetector->SetDataDir(newValue);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+=== END OF FILE ===
+
+=== FILE: ./src/PhysicsList.cc ===
+
+#include <G4EmDNAPhysics.hh>
+#include <G4EmDNAPhysics_option2.hh>
+#include <G4EmDNAPhysics_option4.hh>
+#include <G4EmDNAPhysics_option6.hh>
+#include <G4EmDNAPhysics_option8.hh>
+#include <G4EmStandardPhysics.hh>
+#include <G4EmStandardPhysics_option4.hh>
+#include <G4EmLivermorePhysics.hh>
+#include <G4SystemOfUnits.hh>
+#include <G4ParticleDefinition.hh>
+#include <G4EmParameters.hh>
+#include "globals.hh"
+#include "PhysicsList.hh"
+
+PhysicsList::PhysicsList() : G4VModularPhysicsList(){
+	/* Remove it to obtain more control in simulation
+	 * using macrofiles */
+	//G4double currentDefaultCut = 1. * CLHEP::um;
+	//SetDefaultCutValue(currentDefaultCut);
+	G4ProductionCutsTable::GetProductionCutsTable()->
+						   SetEnergyRange(10*eV, 1*GeV);
+	G4EmParameters* param = G4EmParameters::Instance();
+	param->SetMinEnergy(10 * eV);
+	param->SetMaxEnergy(1 * GeV);
+	SetVerboseLevel(1);					   
+	
+	AddTransportation();
+	//fpEmPhysicsList = new G4EmLivermorePhysics();
+	fPhysName = "G4EmDNAPhysics_option2";
+	fpEmPhysicsList = new G4EmDNAPhysics_option2(verboseLevel);
+	RegisterPhysics(fpEmPhysicsList);
+	
+	fpPhysDir = new G4UIdirectory("/physics/");
+	fpPhysDir->SetGuidance("Change paramaters of Physics List");
+	fpPhysicsUI = new G4UIcmdWithAString("/physics/setPhysics", this);
+	fpPhysicsUI->AvailableForStates(G4State_PreInit);
+};
+
+void PhysicsList::RegisterPhysicsConstructor(const G4String& name){
+	if (verboseLevel > 0){
+		G4cout << "========= Register Physics: " << 
+			      name <<
+			      "=========" << G4endl;}
+			      
+	G4VPhysicsConstructor* pNewPhysics = nullptr;
+	if (name == fPhysName){
+		return;}
+       if (name == "G4EmDNAPhysics"){
+		
+		pNewPhysics = new G4EmDNAPhysics(verboseLevel);
+	} else if (name == "G4EmDNAPhysics_option2"){
+		pNewPhysics = new G4EmDNAPhysics_option2(verboseLevel);
+	} else if (name == "G4EmDNAPhysics_option4"){
+		pNewPhysics = new G4EmDNAPhysics_option4(verboseLevel);
+	} else if (name == "G4EmDNAPhysics_option6"){
+		pNewPhysics = new G4EmDNAPhysics_option6(verboseLevel);
+	} else if (name == "G4EmDNAPhysics_option8"){
+		pNewPhysics = new G4EmDNAPhysics_option8(verboseLevel);
+	} else if (name == "G4EmStandardPhysics_option0"){
+		pNewPhysics = new G4EmStandardPhysics(verboseLevel);
+	} else if (name == "G4EmStandardPhysics_option4"){
+		pNewPhysics = new G4EmStandardPhysics_option4(verboseLevel);
+	} else if (name == "G4EmLivermorePhysics"){
+		pNewPhysics = new G4EmLivermorePhysics(verboseLevel);
+		
+	} else {
+		G4cout << "PhysicsList::RegisterPhysicsConstructor: <" << name << ">"
+	   << " fails - name is not defined" << G4endl;
+	return;
+  }
+  
+  if (pNewPhysics){
+	  RemovePhysics(fpEmPhysicsList);
+      ReplacePhysics(pNewPhysics);
+      fPhysName = name;
+      fpEmPhysicsList = pNewPhysics;
+  }
+};
+
+void PhysicsList::SetNewValue(G4UIcommand* command, G4String value){
+	if (command == fpPhysicsUI){
+		RegisterPhysicsConstructor(value);
+	}
+};
+=== END OF FILE ===
+
+=== FILE: ./src/SteppingAction.cc ===
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file SteppingAction.cc
+/// \brief Implementation of the SteppingAction class
+
+#include "SteppingAction.hh"
+
+#include "DetectorConstruction.hh"
+#include "EventAction.hh"
+#include "PrimaryGeneratorAction.hh"
+#include "RunAction.hh"
+
+#include "G4AnalysisManager.hh"
+#include "G4SteppingManager.hh"
+#include "G4SystemOfUnits.hh"
+#include "G4Threading.hh"
+#include "G4VPhysicalVolume.hh"
+#include "G4VTouchable.hh"
+#include "Randomize.hh"
+#include "G4Electron.hh"
+
+// #ifdef G4MULTITHREADED
+//   #include "G4MTRunManager.hh"
+// #else
+#include "G4RunManager.hh"
+// #endif
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+SteppingAction::SteppingAction(EventAction* event) : G4UserSteppingAction(), fpEventaction(event) {}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+SteppingAction::~SteppingAction() {}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+void SteppingAction::UserSteppingAction(const G4Step* step)
+{
+  // #ifdef G4MULTITHREADED
+  //     G4MTRunManager *pRunManager = G4MTRunManager::GetRunManager();
+  // #else
+  G4RunManager* pRunManager = G4RunManager::GetRunManager();
+  const DetectorConstruction* pDetector = static_cast<const DetectorConstruction*>(pRunManager->GetUserDetectorConstruction());
+  // #endif
+
+  G4int eventID = pRunManager->GetCurrentEvent()->GetEventID();
+
+  G4double flagProcess(0.);
+  G4double x, y, z;
+  G4double dE;
+  G4String process_name;
+  process_name = step->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessName();
+  G4int subtype = step->GetPostStepPoint()->GetProcessDefinedStep()->GetProcessSubType();
+
+  G4double detectorEfficiency = pDetector->GetEfficiency();
+
+  // only ionizations in the target will be recorded  
+  G4String volName = step->GetPreStepPoint()->GetPhysicalVolume()->GetName();
+  if (volName.contains("Target")){
+    if (process_name == "e-_G4DNAElastic")
+      flagProcess = 1;
+    else if (process_name == "e-_G4DNAExcitation")
+      flagProcess = 2;
+    else if (subtype == 2 || subtype == 53) 
+	  flagProcess = 3;
+	
+    // Energy deposited and position of the interaction are saved
+    dE = step->GetTotalEnergyDeposit() / eV;
+	
+    if (dE != 0) {
+      x = step->GetPostStepPoint()->GetPosition().x() / nanometer;
+      y = step->GetPostStepPoint()->GetPosition().y() / nanometer;
+      z = step->GetPostStepPoint()->GetPosition().z() / nanometer;
+      G4double densityPre = step->GetPreStepPoint()->GetMaterial()->GetDensity();
+      G4double densityPost = step->GetPostStepPoint()->GetMaterial()->GetDensity();
+
+      // get analysis manager
+      G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
+
+      // fill ntuple
+      // analysisManager->FillNtupleDColumn(2, 0, eventID);
+      // analysisManager->FillNtupleDColumn(2, 1, flagProcess);
+      // analysisManager->FillNtupleDColumn(2, 2, x);
+      // analysisManager->FillNtupleDColumn(2, 3, y);
+      // analysisManager->FillNtupleDColumn(2, 4, z);
+      // analysisManager->FillNtupleDColumn(2, 5, dE);
+      // analysisManager->AddNtupleRow(2);
+
+      // histogram
+      if (flagProcess == 3 && (G4UniformRand() < detectorEfficiency)) {
+        G4int nbIonisations = step->GetSecondaryInCurrentStep()->size();
+        G4ParticleDefinition* def = step->GetTrack()->GetDefinition();
+        
+        fpEventaction->AddEventIn(nbIonisations);
+        
+        
+        if (def != G4Electron::Definition()) fpEventaction->AddIonEventIn(nbIonisations);
+        else fpEventaction->AddElectronEventIn(nbIonisations);
+        // analysisManager->FillNtupleDColumn(3, 0, nbIonisations);
+        // analysisManager->AddNtupleRow(3);
+      }
+    }
+  }
+}
+=== END OF FILE ===
+
+=== FILE: ./src/PrimaryGeneratorAction.cc ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file PrimaryGeneratorAction.cc
+/// \brief Implementation of the PrimaryGeneratorAction class
+
+#include "PrimaryGeneratorAction.hh"
+
+#include "G4LogicalVolumeStore.hh"
+#include "G4SystemOfUnits.hh"
+#include "G4Tubs.hh"
+#include "G4Box.hh"
+#include "G4Orb.hh"
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
+
+PrimaryGeneratorAction::PrimaryGeneratorAction() : G4VUserPrimaryGeneratorAction()
+{
+  G4int n_particle = 1;
+  fpParticleGun = new G4ParticleGun(n_particle);
+
+  // default gun parameters
+  fpParticleGun->SetParticleEnergy(500. * eV);
+  fpParticleGun->SetParticleMomentumDirection(G4ThreeVector(1., 0., 0.));
+  fpParticleGun->SetParticlePosition(G4ThreeVector(-1.15 * nanometer, 0., 0));
+}
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
+
+PrimaryGeneratorAction::~PrimaryGeneratorAction()
+{
+  delete fpParticleGun;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo....
+
+void PrimaryGeneratorAction::GeneratePrimaries(G4Event* anEvent)
+{
+  auto* targetLogical = G4LogicalVolumeStore::GetInstance()->GetVolume("World");
+  if (!targetLogical) {
+      G4Exception("PrimaryGenerator", "001", FatalException, "Target volume not found!");
+  }
+
+  G4VSolid* targetSolid = targetLogical->GetSolid();
+  G4double radius = 0;
+  if (auto* orb = dynamic_cast<G4Orb*>(targetSolid)) {
+      radius = orb->GetRadius();
+  } else if (auto* tubs = dynamic_cast<G4Tubs*>(targetSolid)) {
+      radius = tubs->GetOuterRadius();
+  } else if (auto* box = dynamic_cast<G4Box*>(targetSolid)) {
+      radius = box->GetXHalfLength();
+  }
+  
+  G4double xStart = -radius + 0.1*nm; 
+  fpParticleGun->SetParticlePosition(G4ThreeVector(xStart, 0., 0.));
+  fpParticleGun->SetParticleMomentumDirection(G4ThreeVector(1., 0., 0.));
+  fpParticleGun->GeneratePrimaryVertex(anEvent);
+}
+=== END OF FILE ===
+
+=== FILE: ./src/EventAction.cc ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file EventAction.cc
+/// \brief Implementation of the EventAction class
+
+#include "EventAction.hh"
+
+#include "RunAction.hh"
+#include "SteppingAction.hh"
+
+#include "G4AnalysisManager.hh"
+#include "G4Event.hh"
+#include "G4EventManager.hh"
+#include "G4Trajectory.hh"
+#include "G4TrajectoryContainer.hh"
+#include "G4VVisManager.hh"
+#include "Randomize.hh"
+
+#ifdef G4MULTITHREADED
+#  include "G4MTRunManager.hh"
+#else
+#  include "G4RunManager.hh"
+#endif
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+EventAction::EventAction() : G4UserEventAction(), fEventIn(0), fIonEventIn(0), fElectronEventIn(0) {}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+EventAction::~EventAction() {}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+void EventAction::BeginOfEventAction(const G4Event*)
+{
+  fEventIn = 0;
+  fIonEventIn = 0;
+  fElectronEventIn = 0;
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+void EventAction::EndOfEventAction(const G4Event*)
+{
+  G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
+
+  analysisManager->FillNtupleDColumn(1, 0, fEventIn);
+  analysisManager->FillNtupleDColumn(1, 1, fIonEventIn);
+  analysisManager->FillNtupleDColumn(1, 2, fElectronEventIn);
+  analysisManager->AddNtupleRow(1);
+}
+=== END OF FILE ===
+
+=== FILE: ./src/ActionInitialization.cc ===
+//
+// ********************************************************************
+// * License and Disclaimer                                           *
+// *                                                                  *
+// * The  Geant4 software  is  copyright of the Copyright Holders  of *
+// * the Geant4 Collaboration.  It is provided  under  the terms  and *
+// * conditions of the Geant4 Software License,  included in the file *
+// * LICENSE and available at  http://cern.ch/geant4/license .  These *
+// * include a list of copyright holders.                             *
+// *                                                                  *
+// * Neither the authors of this software system, nor their employing *
+// * institutes,nor the agencies providing financial support for this *
+// * work  make  any representation or  warranty, express or implied, *
+// * regarding  this  software system or assume any liability for its *
+// * use.  Please see the license in the file  LICENSE  and URL above *
+// * for the full disclaimer and the limitation of liability.         *
+// *                                                                  *
+// * This  code  implementation is the result of  the  scientific and *
+// * technical work of the GEANT4 collaboration.                      *
+// * By using,  copying,  modifying or  distributing the software (or *
+// * any work based  on the software)  you  agree  to acknowledge its *
+// * use  in  resulting  scientific  publications,  and indicate your *
+// * acceptance of all terms of the Geant4 Software license.          *
+// ********************************************************************
+//
+// This example is provided by the Geant4-DNA collaboration
+// Any report or published results obtained using the Geant4-DNA software
+// shall cite the following Geant4-DNA collaboration publication:
+// Med. Phys. 37 (2010) 4692-4708
+// J. Comput. Phys. 274 (2014) 841-882
+// The Geant4-DNA web site is available at http://geant4-dna.org
+//
+//
+/// \file ActionInitialization.cc
+/// \brief Implementation of the ActionInitialization class
+
+#include "ActionInitialization.hh"
+
+#include "EventAction.hh"
+#include "PrimaryGeneratorAction.hh"
+#include "RunAction.hh"
+#include "SteppingAction.hh"
+#include "StackingAction.hh"
+
+#include "G4RunManager.hh"
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+ActionInitialization::ActionInitialization() : G4VUserActionInitialization() {}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+ActionInitialization::~ActionInitialization() {}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void ActionInitialization::BuildForMaster() const
+{
+  // In MT mode, to be clearer, the RunAction class for the master thread might be
+  // different than the one used for the workers.
+  // This RunAction will be called before and after starting the
+  // workers.
+  // For more details, please refer to :
+  // https://twiki.cern.ch/twiki/bin/view/Geant4/Geant4MTForApplicationDevelopers
+  //
+  RunAction* runAction = new RunAction();
+  SetUserAction(runAction);
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+
+void ActionInitialization::Build() const
+{
+  SetUserAction(new PrimaryGeneratorAction);
+
+  RunAction* runAction = new RunAction();
+  SetUserAction(runAction);
+
+  EventAction* event = new EventAction();
+  SetUserAction(event);
+  
+  SetUserAction(new SteppingAction(event));
+  SetUserAction(new StackingAction());
+}
+
+//....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
+=== END OF FILE ===
+
+=== FILE: ./src/DetectorConstruction.cc ===
+#include "DetectorConstruction.hh"
+#include "DetectorMessenger.hh"
+#include "G4SystemOfUnits.hh"
+#include "G4RunManager.hh"
+#include "G4NistManager.hh"
+#include "G4Box.hh"
+#include "G4Tubs.hh"
+#include "G4Orb.hh"
+#include "G4LogicalVolume.hh"
+#include "G4Transform3D.hh"
+#include "G4PVPlacement.hh"
+#include "G4VisAttributes.hh"
+#include "G4Tokenizer.hh"
+#include "G4StateManager.hh"
+#include "G4UnionSolid.hh"
+#include <chrono>
+#include <fstream>
+
+static G4VSolid* BuildBalancedUnion(
+    const std::vector<std::pair<G4VSolid*, G4ThreeVector>>& nodes,
+    size_t start,
+    size_t end,
+    G4ThreeVector& out_origin,
+    const G4String& name_prefix,
+    int& solid_counter
+) {
+    if (start == end) {
+        out_origin = nodes[start].second;
+        return nodes[start].first;
+    }
+
+    if (end - start == 1) {
+        G4VSolid* left = nodes[start].first;
+        G4VSolid* right = nodes[end].first;
+        out_origin = nodes[start].second;
+        G4ThreeVector translation = nodes[end].second - nodes[start].second;
+
+        G4String name = name_prefix + "_u" + std::to_string(solid_counter++);
+        return new G4UnionSolid(name, left, right, nullptr, translation);
+    }
+
+    size_t mid = start + (end - start) / 2;
+    G4ThreeVector origin_left, origin_right;
+
+    G4VSolid* left_union = BuildBalancedUnion(nodes, start, mid, origin_left, name_prefix, solid_counter);
+    G4VSolid* right_union = BuildBalancedUnion(nodes, mid + 1, end, origin_right, name_prefix, solid_counter);
+
+    out_origin = origin_left;
+    G4ThreeVector translation = origin_right - origin_left;
+
+    G4String name = name_prefix + "_u" + std::to_string(solid_counter++);
+    return new G4UnionSolid(name, left_union, right_union, nullptr, translation);
+}
+
+struct AtomData {
+    G4ThreeVector pos;
+    G4double radius;
+    G4String element;
+};
+
+DetectorConstruction::DetectorConstruction() : G4VUserDetectorConstruction()
+{
+  fWorldSize = 100 * nm; 
+  fHeight = 6.1 * nm;
+  fInnerRadius = 0. * nm;
+  fOuterRadius = 1.15 * nm;
+  fWaterDensity = 1. * g/cm3;
+  fEfficiency = 1.0;
+  fVoxelSize = 5. * angstrom; 
+  fDataDir = "csv";
+  fGeomType = "PTB";
+  fDetectorMessenger = new DetectorMessenger(this);
+  LoadRadii();
+}
+
+void DetectorConstruction::DefineMaterials()
+{
+  G4NistManager* man = G4NistManager::Instance();
+  fpWorldMaterial = man->FindOrBuildMaterial("G4_WATER");
+  
+  if (std::abs(fWaterDensity - 1.0 * g/cm3) > 1e-4 * g/cm3) {
+    G4String matName = "G4_WATER_DENSE_" + std::to_string(fWaterDensity / (g/cm3));  
+    fpWaterMaterial = G4Material::GetMaterial(matName, false);
+    if (!fpWaterMaterial) {
+      fpWaterMaterial = man->BuildMaterialWithNewDensity(matName, "G4_WATER", fWaterDensity);
+    }
+  } else {
+    fpWaterMaterial = fpWorldMaterial;
+  }
+}
+
+DetectorConstruction::~DetectorConstruction()
+{
+  delete fDetectorMessenger;
+}
+
+G4VPhysicalVolume* DetectorConstruction::Construct()
+{
+  DefineMaterials();
+  return ConstructDetector();
+}
+
+G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
+{
+  // 1. World creation
+  G4Box* solidWorld = new G4Box("World", fWorldSize/2, fWorldSize/2, fWorldSize/2);
+  fpLogicWorld = new G4LogicalVolume(solidWorld, fpWorldMaterial, "World");
+  fpPhysiWorld = new G4PVPlacement(0, G4ThreeVector(), fpLogicWorld, "World", 0, false, 0, true);
+  
+  G4bool isPredefined = (fGeomType == "Histone" || fGeomType == "Ribosome" ||
+					   fGeomType == "NMDA"    || fGeomType == "Cytoskeleton" ||
+					   fGeomType == "PTB" 	  || fGeomType == "StarTrack");
+					   
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  if (isPredefined) BuildPredefinedGeometry();
+  else {
+	  switch (fGeometryMethod){
+	      case GeometryMethod::BOOLEAN:
+		      BuildBooleanGeometry();
+		      break;
+		  case GeometryMethod::VOXEL:
+		      BuildVoxelGeometry();
+		      break;
+		  case GeometryMethod::PREDEFINED:
+		  default:
+		      G4cout << "WARNING: Cannot use PREDEFINED method for a CSV-geometry. Falling back to VOXEL method." << G4endl;
+		      BuildVoxelGeometry();
+	  }
+  }
+
+  // --- Stop the timer ---
+  double time_sec = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+
+  // Convert enum to string
+  G4String methodStr = (fGeometryMethod == GeometryMethod::VOXEL) ? "VOXEL" : 
+                       ((fGeometryMethod == GeometryMethod::BOOLEAN) ? "BOOLEAN" : "PREDEFINED");
+
+  // Ultra-simple logging in just two lines
+  std::ofstream logFile("geometry_benchmark.csv", std::ios::app);
+  logFile << fGeomType << "," << methodStr << "," << (fVoxelSize / angstrom) << "," << time_sec << "\n";
+
+  G4cout << "### [BENCHMARK] Built " << fGeomType << " using " << methodStr
+         << " in " << time_sec << " s ###" << G4endl;
+  
+  return fpPhysiWorld;
+}  
+
+void DetectorConstruction::BuildPredefinedGeometry(){
+  G4VSolid* pSolidTarget = nullptr;
+  G4LogicalVolume* pLogicTarget = nullptr;  
+  if (fGeomType == "Histone" || fGeomType == "Ribosome") {
+    // Spherical targets
+    pSolidTarget = new G4Orb("Target", fOuterRadius);
+  } 
+  else if (fGeomType == "Cytoskeleton" || fGeomType == "NMDA" ||
+           fGeomType == "StarTrack" || fGeomType == "PTB") {
+    // Cylinder targets (PTB, StarTrack, Cytoskeleton, NMDA)
+    pSolidTarget = new G4Tubs("Target", fInnerRadius, fOuterRadius, fHeight/2., 0, 360*degree);
+  }
+  else {
+	G4Exception("DetectorConstruction::BuildPredefinedGeometry",
+				"InvalidPredefinedGeometry", FatalException,
+				"GeomType must be Histone, Ribosome, NMDA, Cytoskeleton, StarTrack, PTB!"); 
+  }
+  pLogicTarget = new G4LogicalVolume(pSolidTarget, fpWaterMaterial, "logic_Target");
+  if (pLogicTarget) {
+    new G4PVPlacement(0, G4ThreeVector(), pLogicTarget, "Target", fpLogicWorld, false, 0);
+    G4VisAttributes* pVisTarget = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
+    pVisTarget->SetForceSolid(true);
+    pLogicTarget->SetVisAttributes(pVisTarget);
+  }
+}
+
+void DetectorConstruction::BuildBooleanGeometry()
+{
+    G4String path_csv = fDataDir + "/" + fGeomType + ".csv";
+    std::ifstream in(path_csv);
+    if (!in.is_open()) {
+      G4Exception("DetectorConstruction::ConstructDetector", "FileNotFound",
+                  FatalException, ("Could not open file: " + path_csv).c_str());
+    }
+
+    G4cout << "-> Parsing CSV for Pure Balanced G4UnionSolid geometry: " << path_csv << G4endl;
+
+    G4String line, element, chain_id, domain_id_str;
+    G4double x, y, z;
+    
+    // Группируем атомы просто по цепям (домены на уровне геометрии больше не нужны!)
+    std::map<G4String, std::vector<AtomData>> chain_atoms;
+    std::map<G4String, G4Orb*> pSolidOrbs;
+    auto radiiEnd = fRadiiMap.end();
+
+    G4double minX = kInfinity, maxX = -kInfinity;
+    G4double minY = kInfinity, maxY = -kInfinity;
+    G4double minZ = kInfinity, maxZ = -kInfinity;
+
+    while (std::getline(in, line)) {
+      if (line.empty()) continue;
+      G4Tokenizer token(line);
+      chain_id = token(",");
+      domain_id_str = token(",");
+      element = token(",");
+      
+      if (chain_id == "chain_id") continue;
+      if (domain_id_str == "domain_id") continue;
+      if (element == "element") continue;
+
+      auto radiusIt = fRadiiMap.find(element);
+      if (radiusIt == radiiEnd) continue;
+
+      try {
+        x = std::stod(token(",")) * angstrom;
+        y = std::stod(token(",")) * angstrom;
+        z = std::stod(token(",")) * angstrom;
+      } catch (const std::exception& e) {
+        continue;
+      }
+
+      G4double r = radiusIt->second;
+      chain_atoms[chain_id].push_back({G4ThreeVector(x, y, z), r, element});
+
+      // Рассчитываем габариты всей молекулы
+      minX = std::min(minX, x - r);
+      maxX = std::max(maxX, x + r);
+      minY = std::min(minY, y - r);
+      maxY = std::max(maxY, y + r);
+      minZ = std::min(minZ, z - r);
+      maxZ = std::max(maxZ, z + r);
+      
+      if (pSolidOrbs.find(element) == pSolidOrbs.end()){
+	      pSolidOrbs[element] = new G4Orb("solid_orb_" + element, r);
+      } 
+    }
+    in.close();
+    
+    G4ThreeVector pMoleculeCenter((maxX + minX)/2.0, (maxY + minY)/2.0, (maxZ + minZ)/2.0);
+    G4double shift = 3.0 * nm;
+    G4ThreeVector pMoleculeSize((maxX - minX)/2.0 + shift, (maxY - minY)/2.0 + shift, (maxZ - minZ)/2.0 + shift);
+    
+    G4Box* pSolidMolecule = new G4Box("solid_molecule", pMoleculeSize.x(), pMoleculeSize.y(), pMoleculeSize.z());
+    G4LogicalVolume* pLogicMolecule = new G4LogicalVolume(pSolidMolecule, fpWorldMaterial, "logic_molecule");
+    pLogicMolecule->SetVisAttributes(&G4VisAttributes::GetInvisible());
+    
+    new G4PVPlacement(nullptr, pMoleculeCenter, pLogicMolecule, "molecule", fpLogicWorld, false, 0, true);
+
+    G4int chain_counter = 0;
+    G4int solid_counter = 0;
+    
+    // Сборка цепей напрямую из атомов в сбалансированное дерево G4UnionSolid (БЕЗ Voxelize и MultiUnion!)
+    std::vector<std::pair<G4VSolid*, G4ThreeVector>> pSolidChains;
+    for (const auto& [chain_id, atoms] : chain_atoms) {
+        if (atoms.empty()) continue;
+
+        G4cout << "-> Building chain " << chain_id << " (" << atoms.size() << " atoms)..." << G4endl;
+
+        std::vector<std::pair<G4VSolid*, G4ThreeVector>> atom_nodes;
+        for (const auto& atom : atoms) {
+            G4Orb* shared_orb = pSolidOrbs[atom.element];
+            atom_nodes.push_back({shared_orb, atom.pos});
+        }
+
+        // Строим идеально сбалансированное дерево G4UnionSolid
+        G4ThreeVector pChainCenter;
+        G4VSolid* pSolidChain = BuildBalancedUnion(
+            atom_nodes, 0, atom_nodes.size() - 1, pChainCenter,
+            "Chain_" + chain_id, solid_counter
+        );
+
+        //G4LogicalVolume* pLogicChain = new G4LogicalVolume(pSolidChain, fpWaterMaterial, "logic_chain_" + chain_id);
+        //pLogicChain->SetVisAttributes(&G4VisAttributes::GetInvisible());
+
+        //G4ThreeVector pRelativePosChain = pChainCenter - pMoleculeCenter;
+        
+        pSolidChains.push_back({pSolidChain, pChainCenter});
+        //new G4PVPlacement(nullptr, pRelativePosChain, pLogicChain, "chain_" + chain_id, pLogicMolecule, false, chain_counter++, false);
+    }
+    
+    G4ThreeVector moleculeWholeCenter;
+    G4VSolid* pSolidWholeMolecule = BuildBalancedUnion(pSolidChains, 0, pSolidChains.size()-1, moleculeWholeCenter, "solid_wholeMolecule", chain_counter);
+    G4LogicalVolume* pLogicWholeMolecule = new G4LogicalVolume(pSolidWholeMolecule, fpWaterMaterial, "logic_wholeMolecule");
+    G4VisAttributes* pVisWholeMolecule = new G4VisAttributes();
+	  pVisWholeMolecule->SetColour(G4Colour(1.0, 0.0, 0.0, 0.3));
+	  pVisWholeMolecule->SetForceSolid(true);
+	  pVisWholeMolecule->SetVisibility(true);
+    pLogicWholeMolecule->SetVisAttributes(pVisWholeMolecule);
+    new G4PVPlacement(nullptr, moleculeWholeCenter, pLogicWholeMolecule, "wholeMolecule_Target", pLogicMolecule, false, 0, false);
+    
+	//fpPhysiWorld->CheckOverlaps(1000, 0.0, true);
+    
+    G4cout << "-> Pure G4UnionSolid Balanced Tree geometry built successfully!" << G4endl;
+    G4cout << "-> Total unique G4Orb solids allocated: " << pSolidOrbs.size() << G4endl;
+    G4cout << "-> Created " << chain_atoms.size() << " chains inside Molecule container." << G4endl;
+}
+
+void DetectorConstruction::BuildVoxelGeometry()
+{
+    G4VSolid* pSolidTarget = nullptr;
+	  G4LogicalVolume* pLogicTarget = nullptr;  
+    G4String path_csv = fDataDir + "/" + fGeomType + ".csv";
+    std::ifstream in(path_csv);
+    if (!in.is_open()) {
+      G4Exception("DetectorConstruction::ConstructDetector", "FileNotFound",
+                  FatalException, ("Could not open file: " + path_csv).c_str());
+    }
+
+    G4String line, element, chain_id, domain_id;
+    G4double x, y, z;
+    
+    std::vector<AtomData> atoms;
+    auto radiiEnd = fRadiiMap.end();
+
+    // 1. Считываем все атомы в вектор в памяти
+    G4double minX = kInfinity, maxX = -kInfinity;
+    G4double minY = kInfinity, maxY = -kInfinity;
+    G4double minZ = kInfinity, maxZ = -kInfinity;
+
+    while (std::getline(in, line)) {
+      G4Tokenizer token(line);
+      chain_id = token(",");
+      domain_id = token(",");
+      element = token(",");
+      if (chain_id == "chain_id") continue;
+      if (domain_id == "domain_id") continue;
+      if (element == "element") continue;
+
+      auto radiusIt = fRadiiMap.find(element);
+      if (radiusIt == radiiEnd) continue;
+
+      try {
+        x = std::stod(token(",")) * angstrom;
+        y = std::stod(token(",")) * angstrom;
+        z = std::stod(token(",")) * angstrom;
+      } catch (const std::exception& e) {
+        continue;
+      }
+
+      G4double r = radiusIt->second;
+      atoms.push_back({G4ThreeVector(x, y, z), r, element});
+
+      // Рассчитываем габариты всей молекулы
+      minX = std::min(minX, x - r);
+      maxX = std::max(maxX, x + r);
+      minY = std::min(minY, y - r);
+      maxY = std::max(maxY, y + r);
+      minZ = std::min(minZ, z - r);
+      maxZ = std::max(maxZ, z + r);
+    }
+    in.close();
+    
+    // Создаем единственный логический объем для вокселя
+    G4Box* pSolidVoxel = new G4Box("solid_Voxel", fVoxelSize, fVoxelSize, fVoxelSize);
+    G4LogicalVolume* pLogicVoxel = new G4LogicalVolume(pSolidVoxel, fpWaterMaterial, "logic_Voxel");
+    
+    G4VisAttributes* pVisVoxel = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
+    pVisVoxel->SetForceSolid(true);
+    pLogicVoxel->SetVisAttributes(pVisVoxel);
+
+    // 3. Заполняем 3D сетку
+    G4int voxelCount = 0;
+    
+    for (G4double vx = minX + fVoxelSize/2.; vx < maxX; vx += fVoxelSize) {
+        for (G4double vy = minY + fVoxelSize/2.; vy < maxY; vy += fVoxelSize) {
+            for (G4double vz = minZ + fVoxelSize/2.; vz < maxZ; vz += fVoxelSize) {
+                
+                G4ThreeVector voxelPos(vx, vy, vz);
+                G4bool isInsideBiomolecule = false;
+
+                // Проверяем, находится ли центр данного вокселя внутри хотя бы одного атома
+                for (const auto& atom : atoms) {
+                    G4double dx = voxelPos.x() - atom.pos.x();
+                    G4double dy = voxelPos.y() - atom.pos.y();
+                    G4double dz = voxelPos.z() - atom.pos.z();
+                    G4double dist2 = dx*dx + dy*dy + dz*dz;
+
+                    if (dist2 < atom.radius * atom.radius) {
+                        isInsideBiomolecule = true;
+                        break;
+                    }
+                }
+
+                // Если воксель внутри структуры — размещаем его
+                if (isInsideBiomolecule) {
+                    // Размещение регулярной сетки неперекрывающихся кубов оптимизируется навигатором Geant4 автоматически
+                    new G4PVPlacement(0, voxelPos, pLogicVoxel, "Target", fpLogicWorld, false, voxelCount++, false);
+                }
+            }
+        }
+    }
+    
+    G4cout << "-> Voxel phantom built. Placed " << voxelCount << " voxels of size " << fVoxelSize/nm << " nm" << G4endl;
+    pLogicTarget = nullptr; // Объемы уже размещены напрямую в fpLogicWorld
+  
+
+  if (!pLogicTarget && pSolidTarget) {
+    pLogicTarget = new G4LogicalVolume(pSolidTarget, fpWaterMaterial, "Target");
+  }
+
+  if (pLogicTarget) {
+    new G4PVPlacement(0, G4ThreeVector(), pLogicTarget, "Target", fpLogicWorld, false, 0);
+    G4VisAttributes* pVisTarget = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));
+    pVisTarget->SetForceSolid(true);
+    pLogicTarget->SetVisAttributes(pVisTarget);
+  }
+}
+
+void DetectorConstruction::SetGeometry(const G4String& name)
+{
+  fGeomType = name;
+
+  if (fGeomType == "PTB") {
+    fInnerRadius = 0. * nm;
+    fOuterRadius = 1.15 * nm; // D=2.3
+    fHeight = 6.1 * nm;
+    fEfficiency = 1.0;
+    fWaterDensity = 1.0 * g/cm3;
+    G4cout << "-> Geometry set to: " << fGeomType << " (Eff=" << fEfficiency << ")" << G4endl;
+  } 
+  else if (fGeomType == "StarTrack") {
+    fInnerRadius = 0. * nm;
+    fOuterRadius = 10. * nm; // D=20
+    fHeight = 20.0 * nm;
+    fEfficiency = 0.20;
+    fWaterDensity = 1.0 * g/cm3;
+    G4cout << "-> Geometry set to: " << fGeomType << " (Eff=" << fEfficiency << ")" << G4endl;
+  }
+  else if (fGeomType == "Cytoskeleton") {
+    fInnerRadius = 7.5 * nm;
+    fOuterRadius = 12.5 * nm;
+    fHeight = 8. * nm;
+    fEfficiency = 1.0;
+    fWaterDensity = 1.407 * g/cm3;
+    G4cout << "-> Geometry set to: " << fGeomType 
+         << " (Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
+  }
+  else if (fGeomType == "NMDA") {
+    fInnerRadius = 0. * nm;
+    fOuterRadius = 4. * nm;
+    fHeight = 18. * nm;
+    fEfficiency = 1.0;
+    fWaterDensity = 1.407 * g/cm3;
+    G4cout << "-> Geometry set to: " << fGeomType 
+         << " (Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
+  }
+  else if (fGeomType == "Histone") {
+    fInnerRadius = 0. * nm;
+    fOuterRadius = 2.5 * nm;
+    fHeight = 5.0 * nm;      
+    fEfficiency = 1.0;
+    fWaterDensity = 1.407 * g/cm3;
+    G4cout << "-> Geometry set to: " << fGeomType 
+         << " (Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
+  }
+  else if (fGeomType == "Ribosome") {
+    fInnerRadius = 0. * nm;
+    fOuterRadius = 12.5 * nm;
+    fHeight = 25.0 * nm;
+    fEfficiency = 1.0;
+    fWaterDensity = 1.407 * g/cm3;
+     G4cout << "-> Geometry set to: " << fGeomType 
+         << " (Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
+  }
+  else {
+	if (std::abs(fWaterDensity - 1.0 * g/cm3) < 1e-4 * g/cm3) {
+      fWaterDensity = 1.407 * g/cm3;
+    }
+    fEfficiency = 1.0;
+    G4cout << "-> Geometry set to: " << fGeomType 
+           << " (Loading from CSV, Target Density=" << fWaterDensity / (g/cm3) << " g/cm3)" << G4endl;
+  }
+  
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+
+void DetectorConstruction::SetGeometryMethod(const G4String& val){
+	
+	G4String strMethod = val;
+	G4StrUtil::to_upper(strMethod);
+	
+	if (strMethod == "VOXEL"){
+		fGeometryMethod = GeometryMethod::VOXEL;
+		G4cout << "Geometry method set to: VOXEL" << G4endl;
+	} else if (strMethod == "BOOLEAN"){
+		fGeometryMethod = GeometryMethod::BOOLEAN;
+		G4cout << "Geometry method set to: BOOLEAN" << G4endl;
+	} else if (strMethod == "PREDEFINED"){
+		fGeometryMethod = GeometryMethod::PREDEFINED;
+		G4cout << "Geometry method set to: PREDEFINED" << G4endl;
+	} else {
+		G4Exception("DetectorConstruction::SetGeometryMethod",
+					"InvalidMethod", FatalException,
+					"Geometry method must be VOXEL, BOOLEAN or PREDEFINED");
+	}
+	
+	if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+		G4RunManager::GetRunManager()->ReinitializeGeometry();
+	}
+}
+
+void DetectorConstruction::SetDiameter(G4double val)
+{
+  fOuterRadius = val/2;
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+void DetectorConstruction::SetVoxelSize(G4double val)
+{
+  fVoxelSize = val/2;
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+void DetectorConstruction::SetHeight(G4double val)
+{
+  fHeight = val;
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+void DetectorConstruction::SetEfficiency(G4double val)
+{
+  fEfficiency = val;
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+void DetectorConstruction::SetDensity(G4double val)
+{
+  fWaterDensity = val;
+  if (G4StateManager::GetStateManager()->GetCurrentState() != G4State_PreInit){
+	  G4RunManager::GetRunManager()->ReinitializeGeometry();
+  }
+}
+
+void DetectorConstruction::SetDataDir(const G4String& val)
+{
+  fDataDir = val;
+  G4cout << "-> Data directory set to: " << fDataDir << G4endl;
+}
+
+void DetectorConstruction::LoadRadii()
+{
+    // Alvarez, S. (2013). A cartography of the van der Waals territories. 
+    // Dalton Transactions, 42(24), 8617-8636.
+    fRadiiMap["H"]  = 1.20 * angstrom;
+    fRadiiMap["HE"] = 1.43 * angstrom;
+    fRadiiMap["LI"] = 2.12 * angstrom;
+    fRadiiMap["BE"] = 1.98 * angstrom;
+    fRadiiMap["B"]  = 1.91 * angstrom;
+    fRadiiMap["C"]  = 1.77 * angstrom;
+    fRadiiMap["N"]  = 1.66 * angstrom;
+    fRadiiMap["O"]  = 1.50 * angstrom;
+    fRadiiMap["F"]  = 1.46 * angstrom;
+    fRadiiMap["NE"] = 1.58 * angstrom;
+    
+    fRadiiMap["NA"] = 2.50 * angstrom;
+    fRadiiMap["MG"] = 2.51 * angstrom;
+    fRadiiMap["MN"] = 2.45 * angstrom;
+    fRadiiMap["AL"] = 2.25 * angstrom;
+    fRadiiMap["SI"] = 2.19 * angstrom;
+    fRadiiMap["P"]  = 1.90 * angstrom;
+    fRadiiMap["S"]  = 1.89 * angstrom;
+    fRadiiMap["CL"] = 1.82 * angstrom;
+    fRadiiMap["AR"] = 1.83 * angstrom;
+
+    fRadiiMap["K"]  = 2.73 * angstrom;
+    fRadiiMap["CA"] = 2.62 * angstrom;
+    
+    fRadiiMap["FE"] = 2.44 * angstrom;
+    fRadiiMap["CO"] = 2.40 * angstrom;
+    fRadiiMap["NI"] = 2.40 * angstrom;
+    fRadiiMap["CU"] = 2.38 * angstrom;
+    fRadiiMap["ZN"] = 2.39 * angstrom;
+    fRadiiMap["AG"] = 2.53 * angstrom;
+    fRadiiMap["AU"] = 2.32 * angstrom;
+    fRadiiMap["AS"] = 1.88 * angstrom;
+    fRadiiMap["SE"] = 1.82 * angstrom;
+    fRadiiMap["BR"] = 1.86 * angstrom;
+    fRadiiMap["I"]  = 2.04 * angstrom;
+
+    G4cout << "-> Van der Waals radii loaded (Source: Alvarez 2013)" << G4endl;
+}
+=== END OF FILE ===
+
+=== FILE: ./src/RunMessenger.cc ===
+#include "RunMessenger.hh"
+#include "RunAction.hh"
+#include "G4UIdirectory.hh"
+#include "G4UIcmdWithAString.hh"
+
+RunMessenger::RunMessenger(RunAction* runAction) : fpRunAction(runAction){
+    fpDirectory = new G4UIdirectory("/icsd/analysis/");
+    fpDirectory->SetGuidance("Control of analysis: name");
+
+    fpFileNameCmd = new G4UIcmdWithAString("/icsd/analysis/setFileName", this);
+    fpFileNameCmd->SetGuidance("Change a name of the output file");
+    fpFileNameCmd->SetParameterName("fileName", false);
+    fpFileNameCmd->AvailableForStates(G4State_PreInit, G4State_Idle);
+}
+
+RunMessenger::~RunMessenger(){
+    delete fpFileNameCmd;
+    delete fpDirectory;
+}
+
+void RunMessenger::SetNewValue(G4UIcommand* command, G4String newValue){
+    if (command == fpFileNameCmd){
+        fpRunAction->SetOutputFileName(newValue);
+    }
+}=== END OF FILE ===
+
+=== FILE: ./run.sh ===
+#!/bin/bash
+# ==============================================================================
+# run.sh
+# Main execution script: venv preparation, parser execution, and C++ compilation.
+# ==============================================================================
+
+set -e # Exit immediately if a command exits with a non-zero status
+
+# 1. Load global project configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/project_config.sh" ]; then
+    source "${SCRIPT_DIR}/project_config.sh"
+else
+    echo "ERROR: project_config.sh not found!" >&2
+    exit 1
+fi
+
+echo "=== PROJECT PREPARATION AND EXECUTION ==="
+
+# 2. Create required directory structure
+mkdir -p "${PROJECT_ROOT}/output/logs"
+mkdir -p "${PROJECT_ROOT}/output/csv"
+mkdir -p "${PROJECT_ROOT}/output/plots"
+mkdir -p "${PROJECT_ROOT}/output/root"
+
+# 3. Deploy Python virtual environment
+chmod +x "${PROJECT_ROOT}/scripts/setup_venv.sh"
+bash "${PROJECT_ROOT}/scripts/setup_venv.sh"
+
+# 4. Run Python parser (download CIF files and generate CSVs)
+echo "--> Running Python parser to prepare macromolecule geometries..."
+if [ -f "$ACTIVATE_SCRIPT" ]; then
+    # Execute the parser directly using the virtual environment's interpreter
+    "$LOCAL_VENV_DIR/bin/python3" "${PROJECT_ROOT}/scripts/main.py"
+else
+    echo "ERROR: Virtual environment not found at ${LOCAL_VENV_DIR}!" >&2
+    exit 1
+fi
+
+# 5. Compile C++ Geant4 application
+chmod +x "${PROJECT_ROOT}/scripts/compile_fast.sh"
+bash "${PROJECT_ROOT}/scripts/compile_fast.sh"
+
+echo "=== PREPARATION COMPLETED SUCCESSFULLY ==="
+
+# 6. Simulation execution
+# If HTCondor is available on the machine, submit the cluster jobs
+if command -v condor_submit >/dev/null 2>&1; then
+    echo "--> HTCondor detected. Submitting jobs..."
+    condor_submit "${PROJECT_ROOT}/jobs/geant4.sub"
+    watch -n 2 condor_q
+else
+    echo "WARNING: HTCondor is not installed on this system."
+    echo "To run simulations locally, execute: ./icsd run_[JOB_ID].mac"
+fi
+
+chmod +x "${PROJECT_ROOT}/analysis.sh"
+bash "${PROJECT_ROOT}/analysis.sh"=== END OF FILE ===
+
+=== FILE: ./icsd.cc ===
+#include "ActionInitialization.hh"
+#include "DetectorConstruction.hh"
+#include "PrimaryGeneratorAction.hh"
+#include "PhysicsList.hh"
+
+#include "G4RunManagerFactory.hh"
+#include "G4Types.hh"
+#include "G4UIExecutive.hh"
+#include "G4UImanager.hh"
+#include "G4UItcsh.hh"
+#include "G4UIterminal.hh"
+#include "G4VisExecutive.hh"
+
+int main(int argc, char** argv)
+{
+
+	long seed = ((long) time(NULL));
+	long enterseed = ((long) time(NULL)) + seed;
+	G4Random::setTheSeed(enterseed);
+	G4Random::showEngineStatus();
+
+	auto pRunManager = G4RunManagerFactory::CreateRunManager();
+	G4int nThreads = G4Threading::G4GetNumberOfCores();
+	pRunManager->SetNumberOfThreads(nThreads);
+	
+	pRunManager->SetUserInitialization(new DetectorConstruction());
+	auto pPhysList = new PhysicsList();
+	pRunManager->SetUserInitialization(pPhysList);
+	auto pGenerator = new PrimaryGeneratorAction();
+	pRunManager->SetUserInitialization(new ActionInitialization());
+	
+	G4UImanager* pUImanager = G4UImanager::GetUIpointer();
+	
+	if (argc > 1){
+		G4String command = "/control/execute ";
+		G4String fileName = argv[1];
+		pUImanager->ApplyCommand(command+fileName);
+	} else {
+		G4VisManager* pVisManager = new G4VisExecutive;
+		pVisManager->Initialize();
+		G4UIExecutive* ui = new G4UIExecutive(argc, argv);
+		pUImanager->ApplyCommand("/control/execute vis.mac");
+		ui->SessionStart();
+		delete ui;
+		delete pVisManager;
+	}
+	
+	delete pRunManager;
+	
+	return 0;
+
+  return 0;
+}
+=== END OF FILE ===
+
+=== FILE: ./jobs/geant4.sub ===
+# ------------------------------------------------------------
+# 1. Universe and executable
+# ------------------------------------------------------------
+universe = vanilla
+executable = scripts/run_geant4.sh
+
+# ------------------------------------------------------------
+# 2. Logging
+# ------------------------------------------------------------
+log = output/logs/job-$(Cluster)-$(Process).log
+output = output/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).out
+error  = output/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).err
+
+# ------------------------------------------------------------
+# 3. Arguments (make sure the script expects these)
+# ------------------------------------------------------------
+arguments = "$(physics) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(geometry) $(geometry_method) $(voxel_val) $(voxel_unit) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
+
+# ------------------------------------------------------------
+# 4. Environment Forwarding
+# ------------------------------------------------------------
+# Forward all submitter's environment variables to the execution node
+getenv = True
+
+# ------------------------------------------------------------
+# 5. Resources
+# ------------------------------------------------------------
+request_cpus = $(cpus)
+request_memory = $(memory)
+request_disk = $(disk)
+
+# ------------------------------------------------------------
+# 6. Input/Output files to transfer
+# ------------------------------------------------------------
+transfer_input_files = icsd, output/csv
+transfer_output_files = output/root
+transfer_output_remaps  = "root = output/root"
+when_to_transfer_output = ON_EXIT
+should_transfer_files = YES
+
+# ------------------------------------------------------------
+# 7. Queue definition
+# ------------------------------------------------------------
+queue physics, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, geometry, geometry_method, voxel_val, voxel_unit, cpus, memory, disk from parameters.txt
+=== END OF FILE ===
+

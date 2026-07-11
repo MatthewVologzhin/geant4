@@ -13,6 +13,7 @@
 #include "G4Tokenizer.hh"
 #include "G4StateManager.hh"
 #include "G4UnionSolid.hh"
+#include <chrono>
 #include <fstream>
 
 static G4VSolid* BuildBalancedUnion(
@@ -110,6 +111,9 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
 					   fGeomType == "NMDA"    || fGeomType == "Cytoskeleton" ||
 					   fGeomType == "PTB" 	  || fGeomType == "StarTrack");
 					   
+
+  auto start = std::chrono::high_resolution_clock::now();
+
   if (isPredefined) BuildPredefinedGeometry();
   else {
 	  switch (fGeometryMethod){
@@ -125,6 +129,20 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
 		      BuildVoxelGeometry();
 	  }
   }
+
+  // --- Stop the timer ---
+  double time_sec = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
+
+  // Convert enum to string
+  G4String methodStr = (fGeometryMethod == GeometryMethod::VOXEL) ? "VOXEL" : 
+                       ((fGeometryMethod == GeometryMethod::BOOLEAN) ? "BOOLEAN" : "PREDEFINED");
+
+  // Ultra-simple logging in just two lines
+  std::ofstream logFile("geometry_benchmark.csv", std::ios::app);
+  logFile << fGeomType << "," << methodStr << "," << (fVoxelSize / angstrom) << "," << time_sec << "\n";
+
+  G4cout << "### [BENCHMARK] Built " << fGeomType << " using " << methodStr
+         << " in " << time_sec << " s ###" << G4endl;
   
   return fpPhysiWorld;
 }  
@@ -332,7 +350,7 @@ void DetectorConstruction::BuildVoxelGeometry()
     in.close();
     
     // Создаем единственный логический объем для вокселя
-    G4Box* pSolidVoxel = new G4Box("solid_Voxel", fVoxelSize/2., fVoxelSize/2., fVoxelSize/2.);
+    G4Box* pSolidVoxel = new G4Box("solid_Voxel", fVoxelSize, fVoxelSize, fVoxelSize);
     G4LogicalVolume* pLogicVoxel = new G4LogicalVolume(pSolidVoxel, fpWaterMaterial, "logic_Voxel");
     
     G4VisAttributes* pVisVoxel = new G4VisAttributes(G4Colour(1.0, 0.0, 0.0));

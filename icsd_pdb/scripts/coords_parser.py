@@ -1,100 +1,103 @@
-# coords_parser.py
+# scripts/coords_parser.py
 from Bio.PDB import MMCIFParser
 import pathlib
 import pandas as pd
 
-from config import *
-
-histone_chain = {"A", "B", "C", "D", "E", "F", "G", "H"}
-
-def parser(name):
+def parse_cif_to_csv(pdb_id, cif_path, csv_path, skip_val=1, excluded_chains=None):
     """
-    Парсер CIF на основе Biopython.
+    Parses a PDB CIF file and extracts atom coordinates into a standardized CSV.
+    Computes coordinates relative to the molecule's center of mass.
     """
-    # Подтягиваем пути из твоего словаря molecules (как в твоем коде)
-    input_path = pathlib.Path(molecules[name]["cif"])
-    if not(input_path.exists()):
-        print(f"CIF file: {input_path} don't exists!")
-        return
-    output_path = pathlib.Path(molecules[name]["csv"])
-    if output_path.exists():
-        print(f"CSV file: {output_path} already exists!")
-        return
-
-    parser = MMCIFParser(QUIET=True) # QUIET=True убирает мелкие предупреждения о пропусках
+    cif_path = pathlib.Path(cif_path)
+    csv_path = pathlib.Path(csv_path)
     
-    try:
-        # Загружаем структуру
-        # name — это ID, input_path — путь к файлу
-        structure = parser.get_structure(name, str(input_path))
+    if not cif_path.exists():
+        print(f"ERROR: CIF file {cif_path} does not exist!")
+        return False
         
+    if csv_path.exists():
+        print(f"--> CSV file {csv_path} already exists. Skipping parsing.")
+        return True
+
+    # Ensure output directory exists
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if excluded_chains is None:
+        excluded_chains = set()
+
+    # QUIET=True suppresses minor PDB warnings
+    parser_obj = MMCIFParser(QUIET=True)
+    try:
+        structure = parser_obj.get_structure(pdb_id, str(cif_path))
         atoms = []
-        average_x = average_y = average_z = 0
+        average_x = average_y = average_z = 0.0
         count = 0
         uni_atoms = set()
 
-        # 1. Первый проход: считаем среднее (как в твоем коде)
-        # Biopython позволяет легко итерироваться по всем атомам
+        # Step 1: Calculate center of mass (average coordinates)
         for atom in structure.get_atoms():
             coord = atom.get_coord()
             average_x += coord[0]
             average_y += coord[1]
             average_z += coord[2]
             count += 1
-        
+
         if count > 0:
             average_x /= count
             average_y /= count
             average_z /= count
 
-        # 2. Второй проход: собираем данные
-        # Итерируемся по моделям -> цепочкам -> остаткам -> атомам
-        
         atom_counter = 0
         domain_counter = 0
-        chain_counter = 0
         domain_max = 150
         model = structure[0]
+
+        # Step 2: Extract atom properties
         for chain in model:
-            chain_counter += 1
+            chain_id = chain.get_id()
+            if chain_id in excluded_chains:
+                continue
+            
             domain_id = 0
             atom_inner_counter = 0
-            chain_id = chain.get_id()
-            if chain_id in molecules[name]["chain"]:
-                continue
             for residue in chain:
                 for atom in residue:
-                    element = atom.element # Biopython сам определяет элемент (C, N, O...)
+                    element = atom.element
+                    # Clean up element name
                     if len(element) > 1 and element not in ["CL", "MG", "FE", "ZN", "MN", "CA", "NA"]:
                         element = element[0]
+                    
                     coord = atom.get_coord()
-                    element_label = element
                     atoms.append([
                         chain_id,
                         domain_id,
-                        element_label, 
-                        coord[0] - average_x, 
-                        coord[1] - average_y, 
+                        element,
+                        coord[0] - average_x,
+                        coord[1] - average_y,
                         coord[2] - average_z
                     ])
                     uni_atoms.add(element)
                     atom_inner_counter += 1
                     atom_counter += 1
-                    
-                if (atom_inner_counter >= domain_max):
+
+                if atom_inner_counter >= domain_max:
                     domain_id += 1
                     domain_counter += 1
                     atom_inner_counter = 0
-        # Сохранение в CSV
-        print(f"===== {name} =====")
-        print(f"Number of atoms: {atom_counter}")
-        print(f"Number of domains: {domain_counter}")
-        print(f"Number of chains: {chain_counter}")
+
+        print(f"===== Successfully parsed PDB: {pdb_id.upper()} =====")
+        print(f"Atoms: {atom_counter} | Domains: {domain_counter} | Center: ({average_x:.2f}, {average_y:.2f}, {average_z:.2f})")
+        
         df_out = pd.DataFrame(atoms, columns=['chain_id', 'domain_id', 'element', 'x', 'y', 'z'])
-        df_out.to_csv(output_path, index=False)
         
-        print(f"Average: {average_x:.2f} | {average_y:.2f} | {average_z:.2f}")
-        print(f"Unique elements: {uni_atoms}")
-        
+        # Apply downsampling (skip factor) if defined
+        if skip_val > 1:
+            df_out = df_out.iloc[::skip_val]
+            print(f"--> Applied downsampling (skip={skip_val}). Remaining atoms: {len(df_out)}")
+            
+        df_out.to_csv(csv_path, index=False)
+        return True
+
     except Exception as e:
-        print(f"Error at parsing {name}: {e}")
+        print(f"ERROR: Failed to parse {pdb_id.upper()}: {e}")
+        return False

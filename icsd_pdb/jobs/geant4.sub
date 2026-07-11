@@ -7,9 +7,9 @@ executable = scripts/run_geant4.sh
 # ------------------------------------------------------------
 # 2. Logging
 # ------------------------------------------------------------
-log = results/logs/job-$(Cluster)-$(Process).log
-output = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).out
-error  = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).err
+log = output/logs/job-$(Cluster)-$(Process).log
+output = output/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).out
+error  = output/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$(energy_val)-$(energy_unit)_$(physics)_$(geometry)_$(geometry_method)_$(voxel_val)-$(voxel_unit).err
 
 # ------------------------------------------------------------
 # 3. Arguments (make sure the script expects these)
@@ -17,22 +17,28 @@ error  = results/logs/job-$(Cluster)-$(Process)_$(part_type)-$(ion_z)-$(ion_a)_$
 arguments = "$(physics) $(part_type) $(ion_z) $(ion_a) $(ion_q) $(energy_val) $(energy_unit) $(beam_on) $(geometry) $(geometry_method) $(voxel_val) $(voxel_unit) $(cpus) $(memory) $(disk) $(Cluster)_$(Process)"
 
 # ------------------------------------------------------------
-# 4. Resources
+# 4. Environment Forwarding
+# ------------------------------------------------------------
+# Forward all submitter's environment variables to the execution node
+getenv = True
+
+# ------------------------------------------------------------
+# 5. Resources
 # ------------------------------------------------------------
 request_cpus = $(cpus)
 request_memory = $(memory)
 request_disk = $(disk)
 
 # ------------------------------------------------------------
-# 5. Input/Output files to transfer
+# 6. Input/Output files to transfer
 # ------------------------------------------------------------
-transfer_input_files = build/icsd, results/csv
-transfer_output_files = results/output
-transfer_output_remaps  = "output = results/output"
+transfer_input_files = icsd, output/csv
+transfer_output_files = output/root
+transfer_output_remaps  = "root = output/root"
 when_to_transfer_output = ON_EXIT
 should_transfer_files = YES
 
 # ------------------------------------------------------------
-# 8. Queue definition
+# 7. Queue definition
 # ------------------------------------------------------------
 queue physics, part_type, ion_z, ion_a, ion_q, energy_val, energy_unit, beam_on, geometry, geometry_method, voxel_val, voxel_unit, cpus, memory, disk from parameters.txt

@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 
 from config import *
 
-def visualize_molecules(output_name=BASE_DIR / "results" / "plots" / "Macromolecules Comparison.html"):
+def visualize_molecules(output_name=BASE_DIR / "output" / "plots" / "Macromolecules Comparison.html"):
     """
     Creation of HTML file for 3D visualizing of specific molecules.
     """

@@ -243,10 +243,10 @@ void plotSingleParticle(const ParticleConfig& cfg) {
     
     // Список физических листов
     const std::vector<PhysOpt> physOptions = {
-        {"G4EmDNAPhysics_option2", "DNA Opt2", kRed},
-        {"G4EmDNAPhysics_option4", "DNA Opt4", kBlue},
-        {"G4EmDNAPhysics_option6", "DNA Opt6", kGreen+2},
-        {"G4EmDNAPhysics_option8", "DNA Opt8", kMagenta+2}
+        {"G4EmDNAPhysics_option2", "DNA Opt2", kRed-4},
+        {"G4EmDNAPhysics_option4", "DNA Opt4", kBlue-4},
+        {"G4EmDNAPhysics_option6", "DNA Opt6", kGreen-3},
+        {"G4EmDNAPhysics_option8", "DNA Opt8", kMagenta-4}
     };
     
     std::string cleanName = cfg.name;
@@ -266,14 +266,14 @@ void plotSingleParticle(const ParticleConfig& cfg) {
     pad1->SetLogy();
     pad1->SetBottomMargin(0.0); 
     pad1->SetTopMargin(0.05);   
-    pad1->SetLeftMargin(0.12);  
-    pad1->SetRightMargin(0.05);
+    pad1->SetLeftMargin(0.08);   
+    pad1->SetRightMargin(0.02);  
     pad1->Draw();
     
     pad2->SetTopMargin(0.0);
     pad2->SetBottomMargin(0.3);
-    pad2->SetLeftMargin(0.12);
-    pad2->SetRightMargin(0.05);
+    pad2->SetLeftMargin(0.08);
+    pad2->SetRightMargin(0.02);;
     pad2->Draw();
     
     std::vector<TObject*> garbage;
@@ -282,7 +282,7 @@ void plotSingleParticle(const ParticleConfig& cfg) {
     garbage.push_back(hFrame);
     
     // Прижимаем легенду вплотную к правой границе (0.945 при RightMargin = 0.05)
-    TLegend* legend = new TLegend(0.755, 0.65, 0.945, 0.93);
+    TLegend* legend = new TLegend(0.785, 0.65, 0.945, 0.93);
     legend->SetTextSize(0.035);
     legend->SetTextFont(42);
     legend->SetBorderSize(0);  
@@ -290,6 +290,7 @@ void plotSingleParticle(const ParticleConfig& cfg) {
     legend->SetEntrySeparation(0.3);
     garbage.push_back(legend);
     
+    TGraphAsymmErrors* expBand = nullptr;
     int counter = 0;
     for (const auto& phys : physOptions) {
         TChain* chain = new TChain("ntuple_1");
@@ -299,7 +300,7 @@ void plotSingleParticle(const ParticleConfig& cfg) {
         TString detectorName = GetNanodosimeterName(cfg.name);
         
         // Находит ровно ОДИН правильный файл нанодозиметра, исключая биологические воксели
-        TString glob = Form("results/output/icsd_ion-%d-%d_%s-%s_%s_%s_PREDEFINED_*.root",
+        TString glob = Form("output/root/icsd_ion-%d-%d_%s-%s_%s_%s_PREDEFINED_*.root",
                             cfg.Z, cfg.A, energyStr.c_str(), cfg.energyUnit.c_str(), phys.name.c_str(), detectorName.Data());
         chain->Add(glob);
         
@@ -370,6 +371,27 @@ void plotSingleParticle(const ParticleConfig& cfg) {
             yAxis->SetTitleSize(0.042);
             yAxis->SetTitleOffset(0.72); // Придвигаем вплотную к графику
             yAxis->CenterTitle(true);
+
+            // Строим экспериментальный коридор погрешности в pad1 с использованием TGraphAsymmErrors
+            expBand = new TGraphAsymmErrors(n);
+            garbage.push_back(expBand);
+            for (int i = 0; i < n; ++i) {
+                double statErr = TMath::Sqrt(yData[i] / totalNExp);
+                double systErr = systemError * yData[i];
+                double totalErr = TMath::Sqrt(statErr*statErr + systErr*systErr);
+
+                // Безопасный расчет нижней ошибки для логарифмического масштаба
+                double yLow = TMath::Max(yData[i] - totalErr, yAxisMin * 1.01);
+                double errLow = yData[i] - yLow;
+                if (errLow < 0.0) errLow = 0.0;
+
+                expBand->SetPoint(i, xData[i], yData[i]);
+                expBand->SetPointError(i, 0.5, 0.5, errLow, totalErr);
+            }
+            expBand->SetFillColorAlpha(kGray, 0.4);
+            expBand->SetFillStyle(1001);
+            expBand->SetLineWidth(0);
+            expBand->Draw("E3 SAME");
             
             graph->Draw("L SAME");
             
@@ -378,10 +400,10 @@ void plotSingleParticle(const ParticleConfig& cfg) {
             lModel->SetNDC();
             lModel->SetTextFont(42);
             lModel->SetTextSize(0.040);
-            lModel->DrawLatex(0.14, 0.105, "#bf{Geant4-DNA} #it{Simulation}");
+            lModel->DrawLatex(0.105, 0.105, "#bf{Geant4-DNA}  #it{Simulation}");
             
             TString particleFormula = GetLatexFormula(cfg.name);
-            lModel->DrawLatex(0.14, 0.045, Form("%s, E = %s %s/u", particleFormula.Data(), energyValStr.Data(), cfg.energyUnit.c_str()));
+            lModel->DrawLatex(0.105, 0.045, Form("%s, E = %s %s/u", particleFormula.Data(), energyValStr.Data(), cfg.energyUnit.c_str()));
             garbage.push_back(lModel);
             
             pad1->Update();
@@ -441,7 +463,7 @@ void plotSingleParticle(const ParticleConfig& cfg) {
             ya->SetNdivisions(305);
             
             // Скрываем верхнюю метку шкалы pad2, чтобы она не перекрывалась границей pad1
-            ya->ChangeLabel(-1, -1, -1, -1, -1, -1, " ");
+            //ya->ChangeLabel(-1, -1, -1, -1, -1, -1, " ");
             
             // Коридор ошибок, начинающийся и заканчивающийся строго по осям
             TGraphErrors* errCorridor = new TGraphErrors(n);
@@ -492,6 +514,9 @@ void plotSingleParticle(const ParticleConfig& cfg) {
     graphExp->Draw("P E SAME");
     
     legend->AddEntry(graphExp, Form("#scale[0.9]{#bf{%s}}", cfg.dataAuthors.c_str()), "p");
+    if (expBand) {
+        legend->AddEntry(expBand, "#scale[0.9]{#bf{Exp. tolerance}}", "f");
+    }
     legend->Draw();
     
     pad1->Update();
@@ -501,8 +526,8 @@ void plotSingleParticle(const ParticleConfig& cfg) {
     pad2->RedrawAxis();
     
     // Экспорт в PDF
-    fs::create_directories("results/plots/");
-    std::string outputPath = "results/plots/ICSD_" + cfg.name + "_" + FormatEnergy(cfg.energy) + cfg.energyUnit + ".pdf";
+    fs::create_directories("output/plots/validation");
+    std::string outputPath = "output/plots/validation/ICSD_" + cfg.name + "_" + FormatEnergy(cfg.energy) + cfg.energyUnit + ".svg";
     c->SaveAs(outputPath.c_str());
     
     // Полное освобождение памяти
@@ -525,5 +550,5 @@ void plotValidation() {
         std::cout << "========================================\n";
         plotSingleParticle(cfg);
     }
-    std::cout << "\nAll plots have been successfully generated and saved to 'results/plots/'.\n";
+    std::cout << "\nAll plots have been successfully generated and saved to 'output/plots/validation/'.\n";
 }

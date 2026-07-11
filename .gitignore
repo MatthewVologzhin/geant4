@@ -30,8 +30,11 @@ Self-Education/*
 **/*.root
 **/*.csv
 **/*.pdf
+**/*.svg
+**/*.emf
 **/.vscode/
 **/.DS_Store
+**/output/
 **/results/
 **/*.log
 **/*.err
