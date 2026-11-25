@@ -28,6 +28,11 @@ fi
 export CMAKE_PREFIX_PATH="$GEANT4_PREFIX:${CMAKE_PREFIX_PATH:-}"
 export LD_LIBRARY_PATH="$GEANT4_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
+# Human-readable label of the *resolved* Geant4 install (from the prefix path),
+# so it stays accurate even when GEANT4_VERSION_NAME differs from what was picked.
+G4_LABEL="$(basename "$(dirname "$GEANT4_PREFIX")")"
+[[ -n "$G4_LABEL" && "$G4_LABEL" != "." ]] || G4_LABEL="${GEANT4_VERSION_NAME:-unknown}"
+
 BUILD_DIR="${BUILD_DIR:-$ROOT/build}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 JOBS="${JOBS:-$(nproc)}"
@@ -46,7 +51,7 @@ if [[ -x "$BIN" && -f "$BUILD_DIR/CMakeCache.txt" ]]; then
   newer="$(find "$ROOT/src" "$ROOT/include" "$ROOT/main.cc" "$ROOT/CMakeLists.txt" \
              -newer "$BIN" -print -quit 2>/dev/null || true)"
   if [[ -z "$newer" ]]; then
-    echo "[build] up-to-date: $BIN (Geant4: ${GEANT4_VERSION_NAME:-unknown})"
+    echo "[build] up-to-date: $BIN (Geant4: $G4_LABEL)"
     exit 0
   fi
   echo "[build] changes detected (e.g. ${newer#$ROOT/})"
