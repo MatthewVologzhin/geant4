@@ -157,11 +157,15 @@ sample_task() {
   printf '%s %s %s' "$d" "$mt" "$rate"
 }
 
-# scheduler per-scenario running/pending counts (best effort)
+# scheduler per-scenario running/pending counts (best effort).
+# SCHED_OK=1 means a real scheduler query ran, so its counts are authoritative for
+# run/pending (a finished job must not be reported as running from a fresh log).
 declare -A SCHED_RUN SCHED_PEND
+SCHED_OK=0
 sched_snapshot() {
-  SCHED_RUN=(); SCHED_PEND=()
-  if [[ "$SCHEDULER" == "slurm" ]]; then
+  SCHED_RUN=(); SCHED_PEND=(); SCHED_OK=0
+  if [[ "$SCHEDULER" == "slurm" ]] && command -v squeue >/dev/null 2>&1; then
+    SCHED_OK=1
     local j t
     while read -r j t; do
       [[ -z "$j" ]] && continue
@@ -171,7 +175,8 @@ sched_snapshot() {
         PD)      (( SCHED_PEND["$sc"]++ )) ;;
       esac
     done < <(squeue -u "$USER" -h -o "%j %t" 2>/dev/null)
-  elif [[ "$SCHEDULER" == "condor" ]]; then
+  elif [[ "$SCHEDULER" == "condor" ]] && command -v condor_q >/dev/null 2>&1; then
+    SCHED_OK=1
     local b s
     while read -r b s; do
       [[ -z "$b" ]] && continue
@@ -231,17 +236,27 @@ snapshot() {
       fi
     done
 
-    # finished tasks whose log was removed still count as full chunks
+    # finished tasks whose log was removed still count as full chunks;
+    # a completed chunk counts as a full job regardless of what the (possibly
+    # truncated) log says, so raise the event count to at least nchunks*EPJ.
     local extra=$(( nchunks - nlogs )); (( extra < 0 )) && extra=0
     sc_ev=$(( sc_ev + extra * EVENTS_PER_JOB ))
+    (( sc_ev < nchunks * EVENTS_PER_JOB )) && sc_ev=$(( nchunks * EVENTS_PER_JOB ))
 
-    local sc_done=$nchunks
-    local sc_run_final=$sc_run
+    local sc_done=$nchunks sc_run_final sc_pend
     local srun="${SCHED_RUN[$scenario]:-0}"
     local spend="${SCHED_PEND[$scenario]:-0}"
-    (( srun > sc_run_final )) && sc_run_final=$srun
-    local sc_pend=$(( NJOBS - sc_done - sc_run_final )); (( sc_pend < 0 )) && sc_pend=0
-    (( spend > sc_pend )) && sc_pend=$spend
+    if (( SCHED_OK )); then
+      # Scheduler is authoritative: a job it no longer reports cannot be "running",
+      # even if its log file looks fresh.
+      sc_run_final=$srun
+      sc_pend=$(( NJOBS - sc_done - srun )); (( sc_pend < 0 )) && sc_pend=0
+      (( spend > sc_pend )) && sc_pend=$spend
+      (( srun == 0 )) && sc_rate=0
+    else
+      sc_run_final=$sc_run
+      sc_pend=$(( NJOBS - sc_done - sc_run_final )); (( sc_pend < 0 )) && sc_pend=0
+    fi
 
     local sc_eta="n/a" sc_eta_s=""
     if (( sc_ev >= EVENTS_TOTAL )); then
