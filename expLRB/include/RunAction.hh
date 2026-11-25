@@ -8,6 +8,7 @@
 
 class G4Run;
 class RunMessenger;
+class EnergyLossMessenger;
 class DetectorConstruction;
 
 class RunAction final : public G4UserRunAction
@@ -38,6 +39,7 @@ private:
     static inline bool     fgFileNameLocked{false};
     const DetectorConstruction* fDetector{nullptr};
     std::unique_ptr<RunMessenger> fMessenger;
+    std::unique_ptr<EnergyLossMessenger> fEnergyLossMessenger;
 
     G4Accumulable<G4double> fEdepEM{0.0};
     G4Accumulable<G4double> fEdepHad{0.0};

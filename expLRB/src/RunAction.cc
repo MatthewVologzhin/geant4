@@ -1,6 +1,7 @@
 // RunAction.cc
 #include "RunAction.hh"
 #include "RunMessenger.hh"
+#include "EnergyLossMessenger.hh"
 #include "DetectorConstruction.hh"
 #include "BioDetectorConstruction.hh"
 #include "ScoringProfile.hh"
@@ -64,6 +65,7 @@ RunAction::RunAction(const DetectorConstruction* det) : fDetector(det)
 {
     if (G4Threading::IsMasterThread()) {
         fMessenger = std::make_unique<RunMessenger>();
+        fEnergyLossMessenger = std::make_unique<EnergyLossMessenger>();
     }
 
     auto* accManager = G4AccumulableManager::Instance();
