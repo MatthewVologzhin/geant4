@@ -191,7 +191,7 @@ expLRB/
 │   ├── slurm_array.sh htcondor.sub.in job_run_one.sh probe_schedulers.sh
 ├── plot.C                      # ROOT-анализ и аудит (ACLiC)
 ├── RUNNING.md PROJECT_MEMORY.md AGENTS.md
-└── (legacy) monolayer.mac test.mac vis.mac analyze_lrb.C plot*.C TestEm5.in
+└── (legacy) monolayer.mac test.mac vis.mac
 ```
 
 **Не редактируйте** файлы в `config/macros/`, `config/plot_scenarios.inc` — правьте

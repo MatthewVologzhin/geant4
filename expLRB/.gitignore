@@ -21,6 +21,3 @@ __pycache__/
 *.pyc
 # Agent scratch (not part of the physics project)
 .kilo/
-# Upstream/scratch dumps that are not part of the physics project
-textinclude.txt
-textsrc.txt

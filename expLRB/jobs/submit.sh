@@ -101,7 +101,7 @@ for row in "${rows[@]}"; do
     if [[ "$SCHEDULER" == "condor" ]]; then
       echo "[dry-run] HTCondor queue $NJOBS -> $scenario  (macro=$macro threads=$threads events/job=$EVENTS_PER_JOB)"
     else
-      echo "[dry-run] sbatch --array=1-$NJOBS --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
+      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
     fi
     continue
   fi
@@ -109,6 +109,7 @@ for row in "${rows[@]}"; do
   if [[ "$SCHEDULER" == "slurm" ]]; then
     echo "[submit] SLURM array 1-$NJOBS  ->  $scenario"
     sbatch --array=1-"$NJOBS" \
+      --cpus-per-task="$threads" \
       --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR" \
       "$SELF_DIR/slurm_array.sh"
   else

@@ -15,7 +15,17 @@ OUT="${4:?output root path}"
 THREADS="${5:-${THREADS:-10}}"
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN="${EXP_LRB_BIN:-$(cd "$SELF_DIR/.." && pwd)/build/expLRB}"
+PROJECT_ROOT="$(cd "$SELF_DIR/.." && pwd)"
+BIN="${EXP_LRB_BIN:-$PROJECT_ROOT/build/expLRB}"
+
+# Make the Geant4 runtime environment available on compute nodes (LD_LIBRARY_PATH,
+# G4 data paths). Uses config/geant4.conf (GEANT4_PREFIX) unless already set.
+if [[ -z "${GEANT4_PREFIX:-}" && -f "$PROJECT_ROOT/config/geant4.conf" ]]; then
+  set +u; source "$PROJECT_ROOT/config/geant4.conf"; set -u
+fi
+if [[ -n "${GEANT4_PREFIX:-}" && -f "$GEANT4_PREFIX/bin/geant4.sh" ]]; then
+  set +u; source "$GEANT4_PREFIX/bin/geant4.sh"; set -u
+fi
 
 [[ -f "$BASE_MACRO" ]] || { echo "[job] base macro not found: $BASE_MACRO" >&2; exit 2; }
 [[ -x "$BIN" ]]       || { echo "[job] binary not found/executable: $BIN (run scripts/build.sh)" >&2; exit 2; }
