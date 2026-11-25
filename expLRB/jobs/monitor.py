@@ -44,6 +44,13 @@ def scenario_of(job_ad):
 
 
 def total_events_of(job_ad):
+    # Prefer the explicit custom attribute set by htcondor.sub.in (+ExpLRBEvents).
+    v = job_ad.get("ExpLRBEvents")
+    if v is not None:
+        try:
+            return int(str(v).strip('"'))
+        except ValueError:
+            pass
     args = str(job_ad.get("Args") or job_ad.get("Arguments") or "")
     toks = args.split()
     # job_run_one.sh <macro> <seed> <events> <out> <threads>
@@ -94,7 +101,7 @@ def get_jobs(show_all, scenario_filter):
     try:
         res = subprocess.run(
             ["condor_q", "-json", "-attributes",
-             "ClusterId,ProcId,JobStatus,JobStartDate,QDate,Iwd,Out,Args,JobBatchName"],
+             "ClusterId,ProcId,JobStatus,JobStartDate,QDate,Iwd,Out,Args,Arguments,ExpLRBEvents,JobBatchName"],
             capture_output=True, text=True, timeout=8)
         raw = json.loads(res.stdout) if res.stdout.strip() else []
     except Exception:

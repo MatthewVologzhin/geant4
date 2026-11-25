@@ -26,4 +26,5 @@ request_cpus            = @@THREADS@@
 request_memory          = @@MEMORY@@
 request_disk            = @@DISK@@
 +JobBatchName           = "expLRB_@@TAG@@"
++ExpLRBEvents           = @@EVENTS@@
 queue @@NJOBS@@
