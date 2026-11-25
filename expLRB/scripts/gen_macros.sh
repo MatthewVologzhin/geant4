@@ -306,10 +306,10 @@ main() {
   [[ "${#scen[@]}" -gt 0 ]] || die "no [scenario:...] sections found in $CONF"
 
   {
-    printf 'scenario\tgeometry\tsample\tphysics\tscoring\tevents\tthreads\tmacro\n'
+    printf 'scenario\tgeometry\tsample\tphysics\tscoring\tevents\tthreads\tmacro\tmemory\tdisk\n'
     local tag
     for tag in "${scen[@]}"; do
-      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\tconfig/macros/%s.mac\n' \
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\tconfig/macros/%s.mac\t%s\t%s\n' \
         "$tag" \
         "$(getv "scenario:$tag" geometry)" \
         "$(getv "scenario:$tag" sample)" \
@@ -317,7 +317,9 @@ main() {
         "$(getv "scenario:$tag" scoring)" \
         "$(field run events "$tag")" \
         "$(field run threads "$tag")" \
-        "$tag"
+        "$tag" \
+        "$(field sample memory "$tag")" \
+        "$(field sample disk "$tag")"
     done
   } > "$MANIFEST"
 

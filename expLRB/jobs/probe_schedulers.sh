@@ -17,7 +17,7 @@ fi
 
 # --- HTCondor: sum of CPUs on available (unclaimed/owner) slots ---
 if command -v condor_status >/dev/null 2>&1; then
-  condor_free="$(condor_status -available -af Cpus 2>/dev/null | awk '{s+=$1} END {printf "%d", s+0}')"
+  condor_free="$(condor_status -avail -af Cpus 2>/dev/null | awk '{s+=$1} END {printf "%d", s+0}')"
   condor_free="${condor_free:-0}"
 fi
 

@@ -15,6 +15,8 @@
 #   EVENTS_TOTAL     total events per configuration (default 1000000)
 #   EVENTS_PER_JOB   events per chunk/job         (default 50000 -> 20 jobs)
 #   THREADS          threads per job; cluster default is 1 (single-thread)  (default 1)
+#   MEMORY           memory per job in MB (overrides manifest per-sample)   (default: manifest)
+#   DISK             disk per job in MB (overrides manifest per-sample)     (default: manifest)
 #   SCHEDULER        auto|slurm|condor            (default auto)
 #   MANIFEST         path to manifest.tsv         (default config/macros/manifest.tsv)
 #   RAW_DIR          raw chunk output dir         (default output/raw)
@@ -68,7 +70,7 @@ fi
 
 # --- read scenarios from the manifest ---
 declare -a rows=()
-while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro; do
+while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro memory disk; do
   [[ -z "$scenario" || "$scenario" == "scenario" ]] && continue
   if [[ "${#selected[@]}" -gt 0 ]]; then
     keep=0
@@ -77,7 +79,7 @@ while IFS=$'\t' read -r scenario geometry sample physics scoring events threads 
     done
     [[ "$keep" == "1" ]] || continue
   fi
-  rows+=("$scenario|$geometry|$sample|$physics|$scoring|$events|$threads|$macro")
+  rows+=("$scenario|$geometry|$sample|$physics|$scoring|$events|$threads|$macro|$memory|$disk")
 done < "$MANIFEST"
 
 if [[ "${#rows[@]}" -eq 0 ]]; then
@@ -91,25 +93,28 @@ echo "[submit] scheduler=${SCHEDULER}  scenarios=${#rows[@]}  jobs/config=$NJOBS
 
 # --- submit ---
 for row in "${rows[@]}"; do
-  IFS='|' read -r scenario geometry sample physics scoring events threads macro <<< "$row"
+  IFS='|' read -r scenario geometry sample physics scoring events threads macro memory disk <<< "$row"
   mac="$ROOT/$macro"
   threads="${THREADS:-1}"   # cluster default: single-thread per task (override with THREADS=N)
+  memory="${MEMORY:-${memory:-2000}}"   # MB (per-scenario from manifest; override with MEMORY)
+  disk="${DISK:-${disk:-2000}}"         # MB (per-scenario from manifest; override with DISK)
 
   [[ -f "$mac" ]] || { echo "[submit] skip missing macro: $mac" >&2; continue; }
 
   if [[ "$DRY_RUN" == "1" ]]; then
     if [[ "$SCHEDULER" == "condor" ]]; then
-      echo "[dry-run] HTCondor queue $NJOBS -> $scenario  (macro=$macro threads=$threads events/job=$EVENTS_PER_JOB)"
+      echo "[dry-run] HTCondor queue $NJOBS -> $scenario  (macro=$macro threads=$threads events/job=$EVENTS_PER_JOB memory=${memory}M disk=${disk}M)"
     else
-      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --job-name=expLRB_$scenario --output=logs/expLRB_${scenario}_%A_%a.out --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
+      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --mem=${memory}M --job-name=expLRB_$scenario --output=logs/expLRB_${scenario}_%A_%a.out --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
     fi
     continue
   fi
 
   if [[ "$SCHEDULER" == "slurm" ]]; then
-    echo "[submit] SLURM array 1-$NJOBS  ->  $scenario  (threads=$threads)"
+    echo "[submit] SLURM array 1-$NJOBS  ->  $scenario  (threads=$threads mem=${memory}M)"
     sbatch --array=1-"$NJOBS" \
       --cpus-per-task="$threads" \
+      --mem="${memory}M" \
       --job-name="expLRB_$scenario" \
       --output="logs/expLRB_${scenario}_%A_%a.out" \
       --error="logs/expLRB_${scenario}_%A_%a.err" \
@@ -124,9 +129,11 @@ for row in "${rows[@]}"; do
         -e "s#@@EVENTS@@#${EVENTS_PER_JOB}#g" \
         -e "s#@@THREADS@@#${threads}#g" \
         -e "s#@@OUTDIR@@#${RAW_DIR}#g" \
+        -e "s#@@MEMORY@@#${memory}#g" \
+        -e "s#@@DISK@@#${disk}#g" \
         -e "s#@@NJOBS@@#${NJOBS}#g" \
         "$SELF_DIR/htcondor.sub.in" > "$sub"
-    echo "[submit] HTCondor queue $NJOBS  ->  $scenario  ($sub)"
+    echo "[submit] HTCondor queue $NJOBS  ->  $scenario  ($sub) mem=${memory}M disk=${disk}M"
     condor_submit "$sub"
   fi
 done

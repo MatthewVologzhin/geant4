@@ -187,6 +187,37 @@ scripts/merge_all.sh monolayer_nofilt_cells_had output/root output/raw
 Планировщик выбирается `jobs/probe_schedulers.sh`; список сценариев — из
 `config/macros/manifest.tsv`. Число событий на задачу задаётся `--events` (перекрывает макрос).
 
+### Память и диск на задачу
+
+Ресурсы задаются **на сценарий** в `config/runs.conf`, в секции `[sample:...]`:
+```ini
+[sample:suspension_cells]
+...
+memory = 8000      # МБ -> HTCondor request_memory / SLURM --mem
+disk   = 4000      # МБ -> HTCondor request_disk
+```
+`gen_macros.sh` переносит их в `manifest.tsv` (колонки `memory`, `disk`), а `submit.sh` применяет
+к каждой задаче. Переопределение на всю отправку — переменными `MEMORY`/`DISK` (МБ):
+```bash
+MEMORY=16000 jobs/submit.sh monolayer_filt_cells_had
+```
+Важно: без `request_memory` HTCondor выдаёт крошечный cgroup-лимит (~128 МБ) и задача падает в
+`held`. Фактическое потребление смотрите так: `condor_q -af ClusterId ProcId MemoryUsage` (во время),
+`condor_history -af ClusterId ProcId MemoryUsage` (после).
+
+### HTCondor: режим передачи файлов
+
+На пуле с `condor` счётные узлы имеют разные `FileSystemDomain`, поэтому «общий FS»-режим
+(`should_transfer_files = NO`) не матчится (`TARGET.FileSystemDomain == MY.FileSystemDomain` → 0).
+`jobs/htcondor.sub.in` поэтому использует **transfer-режим**: `should_transfer_files = YES`,
+`transfer_executable = False` (скрипт берётся по абсолютному пути — репозиторий виден на узле),
+`getenv = True` (проброс Geant4-окружения), а полученный чанк из `output/raw` переносится домой
+(`transfer_output_files`). Перед отправкой удобно один раз подгрузить окружение в сессию:
+```bash
+source config/geant4.conf && source "$GEANT4_PREFIX/bin/geant4.sh"
+```
+Если задача всё же в `held` — `condor_q -held` покажет причину.
+
 ### Монитор прогресса и ETA
 
 `jobs/monitor.sh` показывает по каждому сценарию число задач (готово / идёт / в очереди),

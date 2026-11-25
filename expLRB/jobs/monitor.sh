@@ -193,7 +193,7 @@ snapshot() {
   local tot_tasks=0 tot_done=0 tot_run=0 tot_pend=0 tot_ev=0 tot_rate=0
 
   local scenario
-  while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro; do
+  while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro memory disk; do
     [[ -z "$scenario" || "$scenario" == "scenario" ]] && continue
     if [[ "${#sel[@]}" -gt 0 ]]; then
       local keep=0 w
