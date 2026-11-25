@@ -270,7 +270,10 @@ def main():
     if args.static or not sys.stdout.isatty():
         run_static(args.all, args.scenario)
     else:
-        run_curses(args)
+        try:
+            run_curses(args)
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":

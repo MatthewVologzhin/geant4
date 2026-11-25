@@ -1,0 +1,9 @@
+# Always check out scripts with LF endings. With CRLF (e.g. git autocrlf on a
+# remote checkout) the "#!" shebang line becomes "#!/usr/bin/env bash\r", and the
+# kernel then fails to exec the script with ENOENT (HTCondor: "No such file or
+# directory") because the interpreter path is "$batch\r".
+*.sh   text eol=lf
+*.py   text eol=lf
+*.in   text eol=lf
+*.mac  text eol=lf
+*.conf text eol=lf
