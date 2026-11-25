@@ -10,6 +10,8 @@
 !icsd_pdb/
 !Internships/
 !Self-Education/
+# expLRB — самостоятельный проект ЛРБ ОИЯИ (собственный .gitignore внутри)
+!expLRB/
 
 # 4. Игнорируем всё содержимое внутри этих папок по умолчанию
 chemistry/*

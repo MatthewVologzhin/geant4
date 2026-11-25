@@ -1,0 +1,32 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "wsl-gui",
+      "displayName": "WSL GUI dev (UI/Vis ON, Debug)",
+      "description": "Local/development build with Geant4 UI and visualization drivers.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "WITH_GEANT4_UIVIS": "ON"
+      }
+    },
+    {
+      "name": "hpc-batch",
+      "displayName": "HPC batch (UI/Vis OFF, Release)",
+      "description": "Cluster/production build without UI or visualization drivers.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-hpc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "WITH_GEANT4_UIVIS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "wsl-gui", "configurePreset": "wsl-gui" },
+    { "name": "hpc-batch", "configurePreset": "hpc-batch" }
+  ]
+}

@@ -1,0 +1,26 @@
+# expLRB standalone repo ignores (build artifacts + run outputs)
+# Build dirs / objects
+build/
+build-hpc/
+CMakeCache.txt
+CMakeFiles/
+*.o
+*.so
+*.d
+*_ACLiC_dict*
+# Run products
+output/
+*.root
+*.log
+*.err
+logs/
+# Editor / OS / python
+.vscode/
+.DS_Store
+__pycache__/
+*.pyc
+# Agent scratch (not part of the physics project)
+.kilo/
+# Upstream/scratch dumps that are not part of the physics project
+textinclude.txt
+textsrc.txt

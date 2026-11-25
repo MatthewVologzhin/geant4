@@ -1,0 +1,4 @@
+/vis/viewer/set/timeWindow/startTime 0 ns
+/vis/viewer/set/timeWindow/endTime {time} ns
+/vis/viewer/refresh
+/vis/tsg/export zb_png frame_{time}.png

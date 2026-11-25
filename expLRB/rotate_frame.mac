@@ -1,0 +1,3 @@
+/vis/viewer/set/viewpointThetaPhi 65 {phi}
+/vis/viewer/refresh
+/vis/ogl/export rot_{phi}.png

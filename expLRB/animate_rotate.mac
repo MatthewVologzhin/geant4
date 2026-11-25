@@ -1,0 +1,8 @@
+/control/execute vis.mac
+/vis/viewer/set/autoRefresh false
+
+# Отрисовываем 5 событий для наглядности треков пучка
+/run/beamOn 5
+
+# Полный оборот на 360 градусов с шагом 5 градусов (72 кадра)
+/control/loop rotate_frame.mac phi 0 355 5
