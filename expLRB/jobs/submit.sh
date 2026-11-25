@@ -14,7 +14,7 @@
 # Env:
 #   EVENTS_TOTAL     total events per configuration (default 1000000)
 #   EVENTS_PER_JOB   events per chunk/job         (default 50000 -> 20 jobs)
-#   THREADS          threads per job (overrides manifest)  (default: manifest)
+#   THREADS          threads per job; cluster default is 1 (single-thread)  (default 1)
 #   SCHEDULER        auto|slurm|condor            (default auto)
 #   MANIFEST         path to manifest.tsv         (default config/macros/manifest.tsv)
 #   RAW_DIR          raw chunk output dir         (default output/raw)
@@ -27,14 +27,13 @@ ROOT="$(cd "$SELF_DIR/.." && pwd)"
 
 EVENTS_TOTAL="${EVENTS_TOTAL:-1000000}"
 EVENTS_PER_JOB="${EVENTS_PER_JOB:-50000}"
-THREADS_ENV="${THREADS:-}"
 SCHEDULER="${SCHEDULER:-auto}"
 MANIFEST="${MANIFEST:-$ROOT/config/macros/manifest.tsv}"
 RAW_DIR="${RAW_DIR:-output/raw}"
 MERGED_DIR="${MERGED_DIR:-output/root}"
 
 usage() {
-  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+  awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$0"
 }
 
 DRY_RUN=0
@@ -94,7 +93,7 @@ echo "[submit] scheduler=${SCHEDULER}  scenarios=${#rows[@]}  jobs/config=$NJOBS
 for row in "${rows[@]}"; do
   IFS='|' read -r scenario geometry sample physics scoring events threads macro <<< "$row"
   mac="$ROOT/$macro"
-  threads="${THREADS_ENV:-$threads}"
+  threads="${THREADS:-1}"   # cluster default: single-thread per task (override with THREADS=N)
 
   [[ -f "$mac" ]] || { echo "[submit] skip missing macro: $mac" >&2; continue; }
 
@@ -102,15 +101,18 @@ for row in "${rows[@]}"; do
     if [[ "$SCHEDULER" == "condor" ]]; then
       echo "[dry-run] HTCondor queue $NJOBS -> $scenario  (macro=$macro threads=$threads events/job=$EVENTS_PER_JOB)"
     else
-      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
+      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --job-name=expLRB_$scenario --output=logs/expLRB_${scenario}_%A_%a.out --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
     fi
     continue
   fi
 
   if [[ "$SCHEDULER" == "slurm" ]]; then
-    echo "[submit] SLURM array 1-$NJOBS  ->  $scenario"
+    echo "[submit] SLURM array 1-$NJOBS  ->  $scenario  (threads=$threads)"
     sbatch --array=1-"$NJOBS" \
       --cpus-per-task="$threads" \
+      --job-name="expLRB_$scenario" \
+      --output="logs/expLRB_${scenario}_%A_%a.out" \
+      --error="logs/expLRB_${scenario}_%A_%a.err" \
       --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR" \
       "$SELF_DIR/slurm_array.sh"
   else

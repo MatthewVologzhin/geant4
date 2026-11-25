@@ -3,7 +3,7 @@
 /control/verbose 1
 /run/verbose 1
 /run/numberOfThreads 10
-/run/printProgress 1000
+/run/printProgress 200
 # --- Physics (PreInit) ---
 /physics/setHadronic QGSP_BIC_HP
 /physics/enableHadronic true

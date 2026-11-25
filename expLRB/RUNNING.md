@@ -164,23 +164,44 @@ root -l -q 'plot.C+'         # ACLiC
 
 ## 6. Кластер
 
+Кластерные задачи по умолчанию **однопоточные** (`THREADS=1`, `--cpus-per-task=1`): задача = 1 ядро
+(лучше упаковка/backfill), меньше памяти на ядро, нет конкуренции потоков. Так как время задачи
+растёт ≈ пропорционально потокам, `EVENTS_PER_JOB` подбирайте так, чтобы задача укладывалась в
+лимит `#SBATCH --time` (сейчас 24 ч) с запасом. Режим настраивается: `THREADS=N`.
+
 ```bash
 # предпросмотр (ничего не отправляется)
 jobs/submit.sh --dry-run
 jobs/submit.sh --dry-run monolayer_nofilt_cells_had
 
-# отправка (авто-выбор планировщика по свободным CPU)
+# отправка (авто-выбор планировщика по свободным CPU); по умолчанию 1 поток/задача
 EVENTS_TOTAL=1000000 EVENTS_PER_JOB=50000 jobs/submit.sh
-SCHEDULER=slurm THREADS=10 jobs/submit.sh
+SCHEDULER=slurm jobs/submit.sh                       # явно SLURM
+THREADS=8 jobs/submit.sh                             # при желании — многопоточно
 
 # объединение готовых чанков (только независимые сиды!)
 # merged по умолчанию -> output/root/<scenario>.root (то, что читает plot.C)
 scripts/merge_all.sh monolayer_nofilt_cells_had output/root output/raw
 ```
 
-Планировщик выбирается `job/probe_schedulers.sh`; список сценариев — из
-`config/macros/manifest.tsv`. Потоки по умолчанию берутся из манифеста (можно переопределить
-переменной `THREADS`), число событий на задачу — через `--events` (перекрывает макрос).
+Планировщик выбирается `jobs/probe_schedulers.sh`; список сценариев — из
+`config/macros/manifest.tsv`. Число событий на задачу задаётся `--events` (перекрывает макрос).
+
+### Монитор прогресса и ETA
+
+`jobs/monitor.sh` показывает по каждому сценарию число задач (готово / идёт / в очереди),
+суммарные события и оценку времени до конца. Работает на login-ноде и только читает логи
+(гостевые ноды не нагружает). ETA — линейная экстраполяция по прогрессу Geant4
+(`rate = Δevents/Δt`); оценка оценочная: первые сэмплы грубые, задачи в очереди могут сдвинуть итог.
+
+```bash
+# передавайте те же EVENTS_*, что и в submit (иначе число задач в оценке будет другим)
+THREADS=1 EVENTS_TOTAL=1000000 EVENTS_PER_JOB=50000 jobs/monitor.sh    # живой watch (обновление 60 c)
+jobs/monitor.sh --once                                                 # один снимок
+jobs/monitor.sh --interval 30 --tasks monolayer_nofilt_cells_had       # детализация по задачам
+```
+
+Прогресс читается из `logs/expLRB_<scenario>_<jobid>_<idx>.out` (такие имена задаёт `jobs/submit.sh`).
 
 ---
 

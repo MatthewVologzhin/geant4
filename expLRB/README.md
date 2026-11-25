@@ -149,13 +149,20 @@ CLI бинарника `build/expLRB`:
 
 ## 6. Кластер
 
+Кластерные задачи по умолчанию **однопоточные** (`THREADS=1`, `--cpus-per-task=1`); `EVENTS_PER_JOB`
+подбирайте под лимит `#SBATCH --time`.
+
 ```bash
 # Проверить план без отправки
 jobs/submit.sh --dry-run
 jobs/submit.sh --dry-run monolayer_nofilt_cells_had
 
-# Отправить (авто-выбор SLURM/HTCondor по свободным CPU)
+# Отправить (авто-выбор SLURM/HTCondor по свободным CPU), по умолчанию 1 поток/задача
 EVENTS_PER_JOB=50000 jobs/submit.sh
+
+# Монитор прогресса и ETA (на login-ноде; только читает логи)
+EVENTS_TOTAL=1000000 EVENTS_PER_JOB=50000 jobs/monitor.sh        # живой watch
+jobs/monitor.sh --once                                           # один снимок
 
 # После завершения — объединить чанки (только независимые сиды!)
 # merged по умолчанию кладётся в output/root/, откуда его читает plot.C
@@ -164,8 +171,8 @@ scripts/merge_all.sh <scenario> output/root output/raw
 
 `jobs/submit.sh` берёт список сценариев из `config/macros/manifest.tsv`; каждый чанк
 запускается с собственным seed через `--seed` и собственным числом событий через `--events`.
-После объединения в `output/root/<scenario>.root` анализ запускается как обычно:
-`root -l -q 'plot.C+'`.
+`jobs/monitor.sh` оценивает прогресс/ETA по логам. После объединения в
+`output/root/<scenario>.root` анализ запускается как обычно: `root -l -q 'plot.C+'`.
 
 ---
 
