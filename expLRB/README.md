@@ -158,11 +158,14 @@ jobs/submit.sh --dry-run monolayer_nofilt_cells_had
 EVENTS_PER_JOB=50000 jobs/submit.sh
 
 # После завершения — объединить чанки (только независимые сиды!)
-scripts/merge_all.sh <scenario> output/merged output/raw
+# merged по умолчанию кладётся в output/root/, откуда его читает plot.C
+scripts/merge_all.sh <scenario> output/root output/raw
 ```
 
 `jobs/submit.sh` берёт список сценариев из `config/macros/manifest.tsv`; каждый чанк
 запускается с собственным seed через `--seed` и собственным числом событий через `--events`.
+После объединения в `output/root/<scenario>.root` анализ запускается как обычно:
+`root -l -q 'plot.C+'`.
 
 ---
 

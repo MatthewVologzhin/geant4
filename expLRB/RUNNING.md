@@ -174,7 +174,8 @@ EVENTS_TOTAL=1000000 EVENTS_PER_JOB=50000 jobs/submit.sh
 SCHEDULER=slurm THREADS=10 jobs/submit.sh
 
 # объединение готовых чанков (только независимые сиды!)
-scripts/merge_all.sh monolayer_nofilt_cells_had output/merged output/raw
+# merged по умолчанию -> output/root/<scenario>.root (то, что читает plot.C)
+scripts/merge_all.sh monolayer_nofilt_cells_had output/root output/raw
 ```
 
 Планировщик выбирается `job/probe_schedulers.sh`; список сценариев — из

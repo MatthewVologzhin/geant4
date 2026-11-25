@@ -18,7 +18,8 @@
 #   SCHEDULER        auto|slurm|condor            (default auto)
 #   MANIFEST         path to manifest.tsv         (default config/macros/manifest.tsv)
 #   RAW_DIR          raw chunk output dir         (default output/raw)
-#   MERGED_DIR       merged output dir            (default output/merged)
+#   MERGED_DIR       merged output dir (plot.C reads output/root/<scenario>.root;
+#                    default output/root so the pipeline flows into plot.C)
 set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +31,7 @@ THREADS_ENV="${THREADS:-}"
 SCHEDULER="${SCHEDULER:-auto}"
 MANIFEST="${MANIFEST:-$ROOT/config/macros/manifest.tsv}"
 RAW_DIR="${RAW_DIR:-output/raw}"
-MERGED_DIR="${MERGED_DIR:-output/merged}"
+MERGED_DIR="${MERGED_DIR:-output/root}"
 
 usage() {
   sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
