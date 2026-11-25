@@ -150,6 +150,13 @@ int main(int argc, char** argv)
         RunMessenger::ForcePlannedEvents(static_cast<G4int>(eventsValue));
     }
 
+    // Force the requested thread count before the RunManager is built, so it is not
+    // overridden by /run/numberOfThreads in the macro (CLI --threads wins). Geant4's
+    // G4FORCENUMBEROFTHREADS takes precedence over the UI command.
+    if (nThreads > 0) {
+        setenv("G4FORCENUMBEROFTHREADS", std::to_string(nThreads).c_str(), 1);
+    }
+
     auto* runManager = G4RunManagerFactory::CreateRunManager();
 
     if (nThreads > 0) {
