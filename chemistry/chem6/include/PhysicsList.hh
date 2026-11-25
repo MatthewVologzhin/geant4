@@ -42,8 +42,8 @@
 //
 //
 
-#ifndef CHEM6_PhysicsList_h
-#define CHEM6_PhysicsList_h 1
+#ifndef CHEM6_PHYSICSLIST_H
+#define CHEM6_PHYSICSLIST_H
 
 #include "G4VModularPhysicsList.hh"
 

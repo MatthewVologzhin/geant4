@@ -59,6 +59,7 @@ class PhysicsList : public G4VModularPhysicsList
     void ConstructProcess() override;
 
     void AddPhysics(const G4String&);
+    void SetStationaryMode(G4bool);
     void SetTrackingCut(G4bool);
     G4String GetPhysicsListName() const {return fPhysName;};
 
@@ -71,6 +72,7 @@ class PhysicsList : public G4VModularPhysicsList
 
     G4String fPhysName = "";
     G4bool fIsTrackingCutSet = true;
+    G4bool fIsStationary = true;
 };
 
 #endif

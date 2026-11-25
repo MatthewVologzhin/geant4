@@ -1,0 +1,4 @@
+# LET(keV/um)   G_value(molecules/100eV)
+290.0           0.050
+450.0           0.075
+680.0           0.098

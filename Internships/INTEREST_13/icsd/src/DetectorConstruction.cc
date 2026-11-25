@@ -58,12 +58,6 @@ void DetectorConstruction::DefineMaterials()
   G4NistManager* man = G4NistManager::Instance();
   G4Material* H2O = man->FindOrBuildMaterial("G4_WATER");
   fpWaterMaterial = H2O;
-
-  // Имитация Майлара через плотную воду (1.4 г/см3)
-  // Это нужно для правильной работы физики Geant4-DNA внутри стенки
-  // G4double mylarDensity = 1.4 * g / cm3;
-  // fpMylarLikeWater = new G4Material("MylarLikeWater", mylarDensity, 1);
-  // fpMylarLikeWater->AddMaterial(H2O, 1.0);
 }
 
 DetectorConstruction::~DetectorConstruction()
@@ -98,7 +92,6 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
 {
   G4Material* worldMaterial = fpWaterMaterial;
   G4Material* targetMaterial = fpWaterMaterial;
-  //G4Material* wallMaterial = fpMylarLikeWater;
 
   // 1. Создаем Мир
   fpSolidWorld = new G4Box("World", fWorldSize / 2, fWorldSize / 2, fWorldSize / 2);
@@ -107,25 +100,11 @@ G4VPhysicalVolume* DetectorConstruction::ConstructDetector()
 
   // 2. Логика построения в зависимости от типа эксперимента
   if (fGeomType == "JetCounter" || fGeomType == "dna") {
-    // Толщина стенки Майлара (в эквиваленте ~150 нм достаточно для электронного равновесия)
-    /*G4double wallThick = 0. * nm;
-
-    // Сначала создаем Стенку (Wall)
-    G4Tubs* solidWall = new G4Tubs("Wall", 0, (fDiameter/2. + wallThick), 
-                                   (fHeight/2. + wallThick), 0, 360*degree);
-    G4LogicalVolume* logicWall = new G4LogicalVolume(solidWall, wallMaterial, "Wall");
-    
-    // Помещаем Стенку в Мир
-    G4VPhysicalVolume* physiWall = new G4PVPlacement(0, G4ThreeVector(), "Wall", 
-                                                     logicWall, fpPhysiWorld, false, 0);*/
 
     // Помещаем Мишень (Target) ВНУТРЬ Стенки
     G4Tubs* solidTarget = new G4Tubs("Target", 0, fDiameter/2., fHeight/2., 0, 360*degree);
     G4LogicalVolume* logicTarget = new G4LogicalVolume(solidTarget, targetMaterial, "Target");
     new G4PVPlacement(0, G4ThreeVector(), "Target", logicTarget, fpPhysiWorld, false, 0);
-    //new G4PVPlacement(0, G4ThreeVector(), "Target", logicTarget, physiWall, false, 0);
-    // G4UserLimits* stepLimits = new G4UserLimits(0.1 * nm); // Шаг 0.1 нм
-    // logicTarget->SetUserLimits(stepLimits);
     
     // Визуализация
     //logicWall->SetVisAttributes(new G4VisAttributes(G4Colour(0, 1, 0, 0.2))); // Зеленая прозрачная стенка

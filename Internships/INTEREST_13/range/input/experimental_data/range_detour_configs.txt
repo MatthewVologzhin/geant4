@@ -1,0 +1,15 @@
+# Config file for Range and Detour Factor validation
+# Format:
+# Mode (range/detour) | ConfigName | ParticleKey | ParticleLabel | Nucleons(A) | MaxEnergyU | YMin | YMax | YResMin | YResMax | Models (comma-separated) | DataFile | DataAuthors
+detour  Detour_alpha    alpha   "alpha"          4   50   0.4   1.2   -0.32   0.07   DNA2,S4                 input/experimental_data/icru90/alpha_detour.dat    ICRU90
+range   Range_alpha     alpha   "alpha"          4   50   2e-6  3.0   -0.32   0.19   DNA2,S4                 input/experimental_data/icru90/alpha_range.dat     ICRU90
+detour  Detour_C12      C12     "C12"           12   20   0.3   3.0   -0.17   0.14   DNA2,DNA4,DNA6,DNA8,S4  input/experimental_data/icru90/c12_detour.dat      ICRU90
+#range   Range_C12       C12     "C12"           12   50   8e-6  1.0   -0.65   0.13   DNA2,S4                 input/experimental_data/icru90/c12_range.dat       ICRU90
+range   Range_C12       C12     "C12"           12   50   8e-6  1.0   -0.65   0.13   DNA2,DNA4,DNA6,DNA8,S4  input/experimental_data/icru90/c12_range.dat       ICRU90
+detour  Detour_e-       e-      "e^{-}"          1 1000   0.3   4.0   -0.99   0.12   DNA2,DNA4,DNA6,DNA8     input/experimental_data/icru90/electron_detour.dat ICRU90
+range   Range_e-        e-      "e^{-}"          1   50   2e-6 100.0  -0.92   0.18   DNA2,DNA4,DNA6,DNA8,S4  input/experimental_data/icru90/electron_range.dat  ICRU90
+detour  Detour_e+       e+      "e^{+}"          1 1000   0.3   3.0   -0.32   0.07   DNA2,DNA4,DNA6,DNA8,S4  input/experimental_data/icru90/positron_detour.dat ICRU90
+range   Range_e+        e+      "e^{+}"          1   50   2e-7 100.0  -0.32   0.19   DNA2,DNA4,DNA6,DNA8,S4  input/experimental_data/icru90/positron_range.dat   ICRU90
+detour  Detour_proton   proton  "proton"         1   50   0.4   1.2   -0.17   0.14   DNA2,S4                 input/experimental_data/icru90/proton_detour.dat   ICRU90
+#range   Range_proton    proton  "proton"         1   50   2e-6 10.0   -0.60   0.13   DNA2,DNA8,S4            input/experimental_data/icru90/proton_range.dat    ICRU90
+range   Range_proton    proton  "proton"         1   50   2e-6 10.0   -0.60   0.13   DNA2,DNA4,DNA6,DNA8,S4  input/experimental_data/icru90/proton_range.dat    ICRU90

@@ -67,7 +67,7 @@ class DetectorMessenger : public G4UImessenger
     G4UIcmdWithAString* fMatCmd = nullptr;
     G4UIcmdWithAString* fPhysCmd = nullptr;
     G4UIcmdWithABool* fTrackingCutCmd = nullptr;
-    G4UIcmdWithADoubleAndUnit* fWorldRadiusCmd = nullptr;
+    G4UIcmdWithADoubleAndUnit* fMaxScoringRadiusCmd = nullptr;
     G4UIcmdWithADoubleAndUnit* fCylinderLengthCmd = nullptr;
     G4UIcmdWithADoubleAndUnit* fWorldOffsetLengthCmd = nullptr;
     G4UIcmdWithADoubleAndUnit* fCylinderMinRadiusCmd = nullptr;

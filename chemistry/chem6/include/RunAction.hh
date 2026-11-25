@@ -40,8 +40,8 @@
 //
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
-#ifndef CHEM6_RunAction_h
-#define CHEM6_RunAction_h 1
+#ifndef CHEM6_RUNACTION_H
+#define CHEM6_RUNACTION_H
 
 #include "G4THitsMap.hh"
 #include "G4UserRunAction.hh"

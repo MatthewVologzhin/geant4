@@ -40,8 +40,8 @@
 //
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
-#ifndef CHEM6_ScoreSpecies_h
-#define CHEM6_ScoreSpecies_h 1
+#ifndef CHEM6_SCORESPECIES_H
+#define CHEM6_SCORESPECIES_H
 
 #include "G4THitsMap.hh"
 #include "G4UIcmdWithADoubleAndUnit.hh"

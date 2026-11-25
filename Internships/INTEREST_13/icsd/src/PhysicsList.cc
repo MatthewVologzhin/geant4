@@ -1,12 +1,8 @@
 
 #include <G4EmDNAPhysics.hh>
-#include <G4EmDNAPhysics_option1.hh>
 #include <G4EmDNAPhysics_option2.hh>
-#include <G4EmDNAPhysics_option3.hh>
 #include <G4EmDNAPhysics_option4.hh>
-#include <G4EmDNAPhysics_option5.hh>
 #include <G4EmDNAPhysics_option6.hh>
-#include <G4EmDNAPhysics_option7.hh>
 #include <G4EmDNAPhysics_option8.hh>
 #include <G4EmStandardPhysics.hh>
 #include <G4EmStandardPhysics_option4.hh>
@@ -52,20 +48,12 @@ void PhysicsList::RegisterPhysicsConstructor(const G4String& name){
        if (name == "G4EmDNAPhysics"){
 		
 		pNewPhysics = new G4EmDNAPhysics(verboseLevel);
-	} else if (name == "G4EmDNAPhysics_option1"){
-		pNewPhysics = new G4EmDNAPhysics_option1(verboseLevel);
 	} else if (name == "G4EmDNAPhysics_option2"){
 		pNewPhysics = new G4EmDNAPhysics_option2(verboseLevel);
-	} else if (name == "G4EmDNAPhysics_option3"){
-		pNewPhysics = new G4EmDNAPhysics_option3(verboseLevel);
 	} else if (name == "G4EmDNAPhysics_option4"){
 		pNewPhysics = new G4EmDNAPhysics_option4(verboseLevel);
-	} else if (name == "G4EmDNAPhysics_option5"){
-		pNewPhysics = new G4EmDNAPhysics_option5(verboseLevel);
 	} else if (name == "G4EmDNAPhysics_option6"){
 		pNewPhysics = new G4EmDNAPhysics_option6(verboseLevel);
-    } else if (name == "G4EmDNAPhysics_option7"){
-		pNewPhysics = new G4EmDNAPhysics_option7(verboseLevel);
 	} else if (name == "G4EmDNAPhysics_option8"){
 		pNewPhysics = new G4EmDNAPhysics_option8(verboseLevel);
 	} else if (name == "G4EmStandardPhysics_option0"){

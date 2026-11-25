@@ -1,27 +1,22 @@
 # Verbosity
-/run/verbose 2
+/run/verbose 0
+/run/printProgress 1
+/control/verbose 0
 /tracking/verbose 0
-/control/verbose 2
-#
-# MT
-/run/numberOfThreads 10
-#
-# Sizes of World and cylinders
-#
-# -> RADIUS: from the range of secondary electrons having the maximum kinetic energy
-/radial/setWorldRadius 600 nm
-#
-# -> LENGTH: example for 1 MeV protons to get about 1000 proton steps
-/radial/setCylinderLength 2.5 um
+/run/numberOfThreads 1
+/radial/analysis/setFileName check
+/radial/setWorldRadius 40 nm
+/radial/setCylinderLength 1 um
+/radial/setWorldOffsetLength 0. um
 /radial/setCylinderNumber 40
 /radial/setLog true
-# -> LENGTH OFFSET: add a space of specified length before/after cylinders entrance/exit
-# Particles will be shot from the entrance of the space
-/radial/setWorldOffsetLength 0. um
-#/radial/setWorldOffsetLength 0.5 um
-#
-# -> THICKNESS: default set to 1 nm
-#
+
+/run/setCut 1 nm
+/cuts/setLowEdge 100 eV
+/process/em/lowestMuHadEnergy 20 eV
+/process/em/lowestElectronEnergy 20 eV
+/process/eLoss/StepFunctionIons 0.1 10 nm
+
 # Atomic deexcitation
 /process/em/fluo true
 /process/em/auger true
@@ -32,6 +27,9 @@
 # - To use Geant4-DNA constructor X, X=0, 2, 4, or 6 (recommended)
 
 /radial/addPhysics G4EmDNAPhysics_option2
+/radial/setStationaryMode true
+
+
 #
 # Heavy ions tracking cut
 #/radial/addIonsTrackingCut false

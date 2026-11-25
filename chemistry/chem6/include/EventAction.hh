@@ -36,8 +36,8 @@
 //
 //
 
-#ifndef EventAction_hh
-#define EventAction_hh 1
+#ifndef EVENTACTION_HH
+#define EVENTACTION_HH
 
 #include "G4DNAChemistryManager.hh"
 #include "G4UserEventAction.hh"

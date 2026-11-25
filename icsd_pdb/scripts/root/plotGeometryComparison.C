@@ -388,7 +388,7 @@ void compareGeometries(const MoleculeConfig& mol, const ParticleRun& run, const 
     std::cout << "  [Legend Selected]: " << candidates[bestIdx].name << " (" << minPoints << " overlapping points detected)." << std::endl;
 
     TLegend* legend = new TLegend(legX1, legY1, legX2, legY2);
-    legend->SetTextSize(0.030);
+    legend->SetTextSize(0.045);
     legend->SetTextFont(42);
     legend->SetBorderSize(0);  
     legend->SetFillStyle(0);   
@@ -414,8 +414,9 @@ void compareGeometries(const MoleculeConfig& mol, const ParticleRun& run, const 
     yAxis->SetTickLength(0.02);
     yAxis->ChangeLabel(1, -1, -1, -1, -1, -1, " "); // Убираем наложение на стыке
     yAxis->SetTitle("Frequency");
-    yAxis->SetTitleSize(0.042);
-    yAxis->SetTitleOffset(0.72);
+    //yAxis->SetTitleSize(0.042);
+    yAxis->SetTitleSize(0.084);
+    yAxis->SetTitleOffset(0.36);
     yAxis->CenterTitle(true);
 
     // Строим полупрозрачные области статистической погрешности (1-sigma и 2-sigma) вокруг эталона в pad1
@@ -491,18 +492,20 @@ void compareGeometries(const MoleculeConfig& mol, const ParticleRun& run, const 
     }
 
     // Теневые коридоры добавляем в легенду
-    legend->AddEntry(refBand1Sig, "#scale[0.9]{#bf{Ref. Stat. Uncertainty (1#kern[1.8]{ }#sigma)}}", "f");
-    legend->AddEntry(refBand2Sig, "#scale[0.9]{#bf{Ref. Stat. Uncertainty (2#kern[1.8]{ }#sigma)}}", "f");
+    legend->AddEntry(refBand1Sig, "#scale[0.9]{#bf{Uncertainty (1#kern[1.1]{ }#sigma)}}", "f");
+    legend->AddEntry(refBand2Sig, "#scale[0.9]{#bf{Uncertainty (2#kern[1.1]{ }#sigma)}}", "f");
 
+    
     // Нанесение строгого водяного знака в левый нижний угол pad1
     TLatex* lModel = new TLatex();
     lModel->SetNDC();
     lModel->SetTextFont(42);
     lModel->SetTextSize(0.040);
-    lModel->DrawLatex(0.115, 0.17, "#bf{Geant4-DNA}#kern[0.1]{#it{Simulation}}");
+    /*lModel->DrawLatex(0.115, 0.17, "#bf{Geant4-DNA}#kern[0.1]{#it{Simulation}}");
     
     TString particleFormula = GetLatexFormula(run.name);
     lModel->DrawLatex(0.115, 0.11, Form("%s, E = %s %s/u", particleFormula.Data(), energyValStr.Data(), run.energyUnit.c_str()));
+    */
     
     std::string physLabel;
     if (phys == "G4EmDNAPhysics_option2"){
@@ -515,7 +518,7 @@ void compareGeometries(const MoleculeConfig& mol, const ParticleRun& run, const 
         physLabel = "G4EmDNAPhysics (Opt8)";
     }
     
-    lModel->DrawLatex(0.115, 0.05, physLabel.c_str());
+    //lModel->DrawLatex(0.115, 0.05, physLabel.c_str());
     garbage.push_back(lModel);
 
     legend->Draw();
@@ -533,23 +536,29 @@ void compareGeometries(const MoleculeConfig& mol, const ParticleRun& run, const 
     xa->SetLimits(xAxisMin, xAxisMax);
     xa->SetRangeUser(xAxisMin, xAxisMax);
     xa->SetTitle("Ionisation number");
-    xa->SetTitleSize(0.042 * scaleFactor);
+    xa->SetTitleSize(0.084 * scaleFactor);
+    //xa->SetTitleSize(0.042 * scaleFactor);
     xa->SetLabelSize(0.038 * scaleFactor);
+    xa->SetLabelOffset(0.012);
     xa->CenterTitle(true);
     xa->SetTickSize(0.02 * scaleFactor); 
-    xa->SetTitleOffset(0.80);
+    xa->SetTitleOffset(0.60);
 
     ResidualRange rRange = GetResidualRange(mol.name);
     ya->SetRangeUser(rRange.min, rRange.max);
-    
+
     std::string refLabel = (refModelType == "BOOLEAN") ? "Boolean" : "Voxel 5 #AA";
-    ya->SetTitle(Form("#eta = Model / %s", refLabel.c_str()));
-    ya->SetTitleSize(0.030 * scaleFactor); 
-    ya->SetTitleOffset(0.95 / scaleFactor); 
-    ya->SetLabelSize(0.028 * scaleFactor); 
+    //ya->SetTitle(Form("#eta = Model / %s", refLabel.c_str()));
+    ya->SetTitle(Form("\\eta = Model / %s", refLabel.c_str()));
+    //ya->SetTitleSize(0.030 * scaleFactor); 
+    ya->SetTitleSize(0.035 * scaleFactor); 
+    ya->SetTitleOffset(0.65 / scaleFactor); 
+    ya->SetLabelSize(0.09); 
+    ya->SetLabelOffset(0.009); 
     ya->SetTickSize(0.02); 
     ya->CenterTitle(true);
     ya->SetNdivisions(305);
+    ya->Draw();
     //ya->ChangeLabel(-1, -1, -1, -1, -1, -1, " "); 
 
     // Нанесение направляющей сетки эталона
@@ -645,7 +654,7 @@ void compareGeometries(const MoleculeConfig& mol, const ParticleRun& run, const 
 
     // Сохранение результатов в output/plots/geometry_comparison
     fs::create_directories("output/plots/geometry_comparison");
-    std::string outputPath = "output/plots/geometry_comparison/ICSD_Comp_" + mol.name + "_" + run.name + "_" + FormatEnergy(run.energy) + run.energyUnit + "_" + physSuffix + ".svg";
+    std::string outputPath = "output/plots/geometry_comparison/ICSD_Comp_" + mol.name + "_" + run.name + "_" + FormatEnergy(run.energy) + run.energyUnit + "_" + physSuffix + ".eps";
     c->SaveAs(outputPath.c_str());
 
     // Освобождение памяти

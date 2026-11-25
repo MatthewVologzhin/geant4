@@ -40,8 +40,8 @@
 //
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
-#ifndef CHEM6_ActionInitialization_h
-#define CHEM6_ActionInitialization_h 1
+#ifndef CHEM6_ACTIONINITIALIZATION_H
+#define CHEM6_ACTIONINITIALIZATION_H
 
 #include "G4VUserActionInitialization.hh"
 

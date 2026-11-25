@@ -33,8 +33,8 @@
 // J. Comput. Phys. 274 (2014) 841-882
 // The Geant4-DNA web site is available at http://geant4-dna.org
 
-#ifndef CHEM6_PrimaryGeneratorAction_h
-#define CHEM6_PrimaryGeneratorAction_h 1
+#ifndef CHEM6_PRIMARYGENERATORACTION_H
+#define CHEM6_PRIMARYGENERATORACTION_H
 
 #include "G4ParticleGun.hh"
 #include "G4VUserPrimaryGeneratorAction.hh"

@@ -58,7 +58,7 @@ class DetectorConstruction : public G4VUserDetectorConstruction
 
     void SetMaterial(const G4String&);
 
-    void SetWorldRadius(const G4double&);
+    void SetMaxScoringRadius(const G4double&);
     void SetWorldOffsetLength(const G4double&);
     
     void SetCylinderLength(const G4double&);
@@ -77,11 +77,13 @@ class DetectorConstruction : public G4VUserDetectorConstruction
   private:
 
     G4double fWorldRadius = 0;
+    G4double fBufferRadius = 0;
     G4double fWorldOffsetLength = 0;
 
     G4double fCylinderLength = 0;
     G4int fCylinderNumber = 0;
     G4double fCylinderMinRadius = 0;
+    G4double fMaxScoringRadius = 0;
     G4bool fCylinderLog = false;
 
     void DefineMaterials();

@@ -40,8 +40,8 @@
 //
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
-#ifndef CHEM6_Run_h
-#define CHEM6_Run_h 1
+#ifndef CHEM6_RUN_H
+#define CHEM6_RUN_H
 
 #include "ScoreSpecies.hh"
 

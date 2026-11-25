@@ -9,7 +9,7 @@
 PROJECT_NAME="icsd_pdb"                               # Project name/identifier
 BINARY_NAME="icsd"                                    # C++ executable target name
 BUILD_TYPE="Release"                                  # CMAKE_BUILD_TYPE (Release / Debug)
-export GEANT4_ENV="/home/users/mvologzhin/programms/geant4-dev/install/bin/geant4.sh" # Path to Geant4 env
+export GEANT4_ENV="/home/users/mvologzhin/programms/geant4-11.5-beta/install/bin/geant4.sh" # Path to Geant4 env
 
 # ------------------------------------------------------------------------------
 # 2. AUTOMATIC PATH RESOLUTION (Do not modify unless changing folder layout)

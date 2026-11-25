@@ -34,8 +34,8 @@
 // The Geant4-DNA web site is available at http://geant4-dna.org
 //
 
-#ifndef CHEM6_PrimaryKiller_h
-#define CHEM6_PrimaryKiller_h 1
+#ifndef CHEM6_PRIMARYKILLER_H
+#define CHEM6_PRIMARYKILLER_H
 
 #include "G4THitsMap.hh"
 #include "G4UImessenger.hh"

@@ -11,11 +11,11 @@ physics_lists = ["dna_opt2", "dna_opt4", "dna_opt6", "dna_opt8", "std_opt4"]
 
 # 3. Список частиц и их параметры (Z, A, Q)
 particles_config = [
-    ("e-", 0, 0, 0),
-    ("e+", 0, 0, 0),
-    ("proton", 0, 0, 0),
-    ("alpha", 0, 0, 0),
-    ("ion", 6, 12, 6) # Углерод
+    #("e-", 0, 0, 0),
+    #("e+", 0, 0, 0),
+    #("proton", 0, 0, 0),
+    ("alpha", 0, 0, 0)#,
+    #("ion", 6, 12, 6) # Углерод
 ]
 
 def get_prts_nb(energy, particle):

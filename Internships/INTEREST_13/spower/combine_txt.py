@@ -4,9 +4,10 @@ import sys
 if (len(sys.argv) > 1):
     cluster_name = sys.argv[1]
 
-    input_dir = pathlib.Path("./root")
+    input_dir = pathlib.Path("./output/root")
 
-    particles = ["e-", "e+", "proton", "alpha", "C12"]
+    #particles = ["e-", "e+", "proton", "deuteron", "alpha", "C12"]
+    particles = ["deuteron"]
     physics = ["DNA2", "DNA4", "DNA6", "DNA8", "S4"]
     #physics = ["S4"]
 
@@ -14,7 +15,7 @@ if (len(sys.argv) > 1):
     for part in particles:
         for phys in physics:
             lines = list()
-            output_file = pathlib.Path(f"./root/{part}_{phys}.txt")
+            output_file = pathlib.Path(f"./output/root/{part}_{phys}.txt")
             with output_file.open("w", encoding="utf-8") as output:
                 for file in sorted(input_dir.glob(f"{cluster_name}*{part}_{phys}.txt")):
                     content = file.read_text(encoding="utf-8")

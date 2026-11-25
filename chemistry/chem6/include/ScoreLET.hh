@@ -40,8 +40,8 @@
 //
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
-#ifndef CHEM6_ScoreLET_h
-#define CHEM6_ScoreLET_h 1
+#ifndef CHEM6_SCORELET_H
+#define CHEM6_SCORELET_H
 
 #include "G4THitsMap.hh"
 #include "G4UIcmdWithADoubleAndUnit.hh"

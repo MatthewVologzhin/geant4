@@ -39,9 +39,9 @@ target_link_libraries(spower ${Geant4_LIBRARIES} )
 # build spower. This is so that we can run the executable directly because it
 # relies on these scripts being in the current working directory.
 #
-set(spower_SCRIPTS
-    spower.in secondary.in plot.C run.sh parameters.txt run_geant4.sh submit.sub create_parameters.py
-  )
+#set(spower_SCRIPTS
+#    spower.in secondary.in plot.C run.sh parameters.txt run_geant4.sh submit.sub create_parameters.py
+#  )
 
 foreach(_script ${spower_SCRIPTS})
   configure_file(

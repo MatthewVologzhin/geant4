@@ -1,0 +1,20 @@
+# 1. Загружаем геометрию и пучок
+/control/execute vis.mac
+
+# 2. Безопасное завершение события (НЕ refresh, чтобы не ронять Qt!)
+/vis/scene/endOfEventAction accumulate 100
+
+# 3. Модель времени drawByCharge
+/vis/modeling/trajectories/create/drawByCharge
+/vis/modeling/trajectories/drawByCharge-0/default/setTimeSliceInterval 0.0005 ns
+
+# 4. Настройка маркера частицы
+/vis/viewer/set/timeWindow/displayHeadTime true
+/vis/viewer/set/timeWindow/fadeFactor 0.7
+/vis/viewer/set/autoRefresh false
+
+# 5. Пускаем 1 частицу
+/run/beamOn 100
+
+# 6. Цикл нарезки кадров
+/control/loop time_frame.mac time 0.0 2. 0.005

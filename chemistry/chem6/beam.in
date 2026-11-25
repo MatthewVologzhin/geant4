@@ -1,7 +1,7 @@
-/run/numberOfThreads 1
+/run/numberOfThreads 2
 
 /chem/phys/registerPhysics G4EmDNAPhysics_option2
-/chem/phys/PhysChemVerbose 2
+#/chem/phys/PhysChemVerbose 2
 
 /process/dna/e-SolvationSubType Meesungnoen2002
 #/process/dna/e-SolvationSubType Ritchie1994
@@ -13,6 +13,9 @@
 /process/chem/TimeStepModel IRT
 #/process/chem/TimeStepModel SBS
 #/process/chem/TimeStepModel IRT_syn
+
+#/process/em/verbose 1
+#/scheduler/verbose 1
 
 /run/initialize
 

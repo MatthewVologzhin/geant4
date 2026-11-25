@@ -51,6 +51,7 @@
 #include <iostream>
 
 class G4Run;
+class RunMessenger;
 
 class RunAction : public G4UserRunAction
 {
@@ -60,9 +61,8 @@ class RunAction : public G4UserRunAction
 
     void BeginOfRunAction(const G4Run*) override;
     void EndOfRunAction(const G4Run*) override;
+    void SetOutputFileName(const G4String& name){fFileName = name;};
     G4Run* GenerateRun() override;
-    void ChangeRootName() const;
-    void CreateRootFile();
 
   private:
     DetectorConstruction* fMyDetectorConstruction = nullptr;
@@ -70,9 +70,9 @@ class RunAction : public G4UserRunAction
 
     //double * fCylDose = nullptr;
 
+    G4String fFileName;
     Run* fRun = nullptr;
-    static G4String fFinalFileName;
-    static G4Mutex fMutex;
+    RunMessenger* fpRunMessenger = nullptr;
     G4RunManager* pRunManager = G4RunManager::GetRunManager();
 };
 #endif

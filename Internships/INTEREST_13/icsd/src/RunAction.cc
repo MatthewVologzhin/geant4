@@ -107,7 +107,7 @@ void RunAction::BeginOfRunAction(const G4Run* run)
 void RunAction::EndOfRunAction(const G4Run*)
 {
   G4EmParameters* pDNAParams = G4EmParameters::Instance();
-  G4bool isMultipleIonisation = pDNAParams->DNAMultipleIonisation();
+  //G4bool isMultipleIonisation = pDNAParams->DNAMultipleIonisation();
   auto analysisManager = G4AnalysisManager::Instance();
   
   analysisManager->Write();
@@ -122,8 +122,8 @@ void RunAction::EndOfRunAction(const G4Run*)
           G4String tempName = folder_name + "/" + "temp_running_file.root";
           //G4String finalName = fFinalFileName + ".root";
           G4String finalName = fFinalFileName;
-          if (isMultipleIonisation) finalName += "_MultiIoni.root";
-          else finalName += ".root";
+          //if (isMultipleIonisation) finalName += "_MultiIoni.root";
+          /*else*/ finalName += ".root";
 
           G4cout << ">>> Renaming " << tempName << " to " << finalName << G4endl;
 

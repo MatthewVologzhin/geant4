@@ -1,0 +1,39 @@
+# ==============================================================================
+# Этап 5: валидационный микро-макрос dE/dx
+# 20Ne (800 МэВ = 40 МэВ/нуклон) в сплошном водяном слое толщиной 10 мкм.
+# Ветка DNA_Opt6 (для EM_Opt4-референса используйте config/test_dedx_em.mac).
+# ==============================================================================
+/control/verbose 1
+/run/verbose 1
+/run/numberOfThreads 2
+/run/printProgress 100
+
+# --- Физика (строго PreInit) ---
+/physics/setHadronic QGSP_BIC_HP
+/physics/enableHadronic true
+/physics/setEM EM_Opt4
+/physics/enableDNAActivator true
+
+# --- Выходной файл ---
+/bio/output/fileName output/root/test_dedx.root
+
+# --- Мир ---
+/expLRB/det/setWorldZ 100 mm
+
+# --- Водяной слой 10 мкм: сплошная среда без клеток (nCells = 0) ---
+/bio/score/target medium
+/bio/layer/create G4_WATER 0
+/bio/layer/size 14 14 0.010 mm
+/bio/layer/pos 0 0 0 mm
+
+# Geant4-DNA в объёме мишени (эталон dE/dx)
+/bio/layer/physics DNA_Opt6
+
+/run/initialize
+
+# --- Пучок: 20Ne, 800 МэВ, вдоль +Z ---
+/gun/particle ion
+/gun/ion 10 20 10
+/gun/energy 800 MeV
+
+/run/beamOn 1000

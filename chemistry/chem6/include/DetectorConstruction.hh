@@ -40,8 +40,8 @@
 //
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
-#ifndef CHEM6_DetectorConstruction_h
-#define CHEM6_DetectorConstruction_h 1
+#ifndef CHEM6_DETECTORCONSTRUCTION_H
+#define CHEM6_DETECTORCONSTRUCTION_H
 
 #include "G4VUserDetectorConstruction.hh"
 

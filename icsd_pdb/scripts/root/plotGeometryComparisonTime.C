@@ -40,10 +40,10 @@ std::string NormalizeMolecule(const std::string& input) {
 
 // РљСЂР°СЃРёРІС‹Рµ РЅР°Р·РІР°РЅРёСЏ РјР°РєСЂРѕРјРѕР»РµРєСѓР» РґР»СЏ РїРѕРґРїРёСЃРµР№ РїРѕ РѕСЃРё X
 std::string GetDisplayMoleculeName(const std::string& s) {
-    if (s == "histone") return "Histone (1kx5)";
+    if (s == "histone") return "Histone (1KX5)";
     if (s == "nmda") return "NMDA (6WHT)";
     if (s == "ribosome") return "Ribosome (4V6X)";
-    if (s == "cytoskeleton") return "Cytoskeleton (7un1)";
+    if (s == "cytoskeleton") return "Cytoskeleton (7UN1)";
     return s;
 }
 
@@ -113,7 +113,7 @@ void plotGeometryComparisonTime() {
 
     // РќР°Р·РІР°РЅРёСЏ РјРµС‚РѕРґРѕРІ РґР»СЏ Р»РµРіРµРЅРґС‹ (СЃ РєРµСЂРЅРёРЅРіРѕРј Р·РЅР°РєР° Р°РЅРіСЃС‚СЂРµРјР°)
     const std::vector<std::string> methodLabels = {
-        "BOOLEAN", "VOXEL 1#kern[2.8]{ }#AA", "VOXEL 5#kern[2.8]{ }#AA", "VOXEL 10#kern[2.8]{ }#AA", "PREDEFINED"
+        "BOOLEAN", "VOXEL 1#kern[0.1]{ }#AA", "VOXEL 5#kern[0.1]{ }#AA", "VOXEL 10#kern[0.1]{ }#AA", "PREDEFINED"
     };
 
     // Р¦РІРµС‚Р° РґР»СЏ СЃС‚РѕР»Р±С†РѕРІ
@@ -126,9 +126,9 @@ void plotGeometryComparisonTime() {
     };
 
     // Р§С‚РµРЅРёРµ CSV РґР°РЅРЅС‹С… РёР· РїР°РїРєРё build [3]
-    std::ifstream infile("build/geometry_benchmark_all.csv");
+    std::ifstream infile("output/csv/geometry_benchmark_all.csv");
     if (!infile.is_open()) {
-        std::cerr << "Error: Could not open build/geometry_benchmark_all.csv" << std::endl;
+        std::cerr << "Error: Could not open output/csv/geometry_benchmark_all.csv" << std::endl;
         return;
     }
 
@@ -149,7 +149,9 @@ void plotGeometryComparisonTime() {
             std::getline(ss, timeStr, ',')) {
             
             try {
+                //double voxelSize = std::stod(voxelSizeStr);
                 double voxelSize = std::stod(voxelSizeStr);
+                voxelSize *= 2;
                 double timeVal = std::stod(timeStr);
                 
                 std::string molecule = NormalizeMolecule(geomType);
@@ -226,10 +228,10 @@ void plotGeometryComparisonTime() {
     // РЎРјРµС‰РµРЅРёРµ pad1 РІРЅРёР· (СЃ 0.08 РґРѕ 0.05) Рё СѓРјРµРЅСЊС€РµРЅРёРµ BottomMargin (СЃ 0.15 РґРѕ 0.13) РґР»СЏ СѓСЃС‚СЂР°РЅРµРЅРёСЏ РїСѓСЃС‚РѕС‚С‹ [5]
     TPad* pad1 = new TPad("pad1_main", "main", 0.0, 0.05, 1.0, 1.0);
     pad1->SetLogy();
-    pad1->SetBottomMargin(0.13); // РљРѕРјРїР°РєС‚РЅРѕРµ РїРѕР»Рµ РґР»СЏ РїРѕРґРїРёСЃРµР№ (РІ NDC)
-    pad1->SetTopMargin(0.08);   
-    pad1->SetLeftMargin(0.12);  
-    pad1->SetRightMargin(0.03);
+    pad1->SetBottomMargin(0.035); // РљРѕРјРїР°РєС‚РЅРѕРµ РїРѕР»Рµ РґР»СЏ РїРѕРґРїРёСЃРµР№ (РІ NDC)
+    pad1->SetTopMargin(0.02);   
+    pad1->SetLeftMargin(0.08);  
+    pad1->SetRightMargin(0.145);
     pad1->Draw();
 
     pad1->cd();
@@ -254,8 +256,8 @@ void plotGeometryComparisonTime() {
     yAxis->SetRangeUser(yAxisMin, yAxisMax);
     yAxis->SetTickLength(0.02);
     yAxis->SetTitle("Geometry Construction Time [s]");
-    yAxis->SetTitleSize(0.045);
-    yAxis->SetTitleOffset(1.1);
+    yAxis->SetTitleSize(0.055);
+    yAxis->SetTitleOffset(0.61);
     yAxis->CenterTitle(true);
 
     // РћС‚СЂРёСЃРѕРІРєР° СЃС‚РѕР»Р±С†РѕРІ TBox РІРЅСѓС‚СЂРё РєР°Р¶РґРѕР№ РіСЂСѓРїРїС‹
@@ -312,16 +314,16 @@ void plotGeometryComparisonTime() {
         double xNDC = leftM + (1.0 - leftM - rightM) * (binCenter - xMin) / (xMax - xMin);
 
         // РЎС‚СЂРѕРєР° 1: РРјСЏ РјРѕР»РµРєСѓР»С‹
-        axisLabels->SetTextSize(0.024);
+        axisLabels->SetTextSize(0.040);
         axisLabels->SetTextColor(kBlack);
-        axisLabels->DrawLatex(xNDC, 0.11, GetDisplayMoleculeName(mol).c_str());
+        axisLabels->DrawLatex(xNDC, 0.055, GetDisplayMoleculeName(mol).c_str());
 
         // РЎС‚СЂРѕРєР° 2: РљРѕР»РёС‡РµСЃС‚РІРѕ Р°С‚РѕРјРѕРІ [4]
-        axisLabels->SetTextSize(0.019);
+        axisLabels->SetTextSize(0.030);
         axisLabels->SetTextColor(kGray+2); // РќРµР№С‚СЂР°Р»СЊРЅС‹Р№ СЃРµСЂС‹Р№ С†РІРµС‚ РґР»СЏ РІС‚РѕСЂРѕСЃС‚РµРїРµРЅРЅС‹С… РґР°РЅРЅС‹С…
         int count = atomCounts[mol];
         TString countStr = (count >= 0) ? Form("N = %s atoms", FormatWithCommas(count).c_str()) : "N = unknown";
-        axisLabels->DrawLatex(xNDC, 0.075, countStr.Data());
+        axisLabels->DrawLatex(xNDC, 0.028, countStr.Data());
     }
 
     // Р’РѕРґСЏРЅРѕР№ Р·РЅР°Рє СЃР»РµРІР° РІРЅРёР·Сѓ (РІС‹СЂРѕРІРЅРµРЅ РїРѕ Р»РµРІРѕР№ РіСЂР°РЅРёС†Рµ СЂР°РјРєРё РіСЂР°С„РёРєР°: 0.12) [5]
@@ -330,19 +332,25 @@ void plotGeometryComparisonTime() {
     lModel->SetNDC();
     lModel->SetTextFont(42);
     lModel->SetTextSize(0.020);
-    lModel->DrawLatex(watermarkX, 0.025, "#bf{Geant4-DNA}#kern[0.1]{#it{Simulation}}");
-    lModel->DrawLatex(watermarkX, 0.008, "Geometry Comparison (Construction Time)");
+    //lModel->DrawLatex(watermarkX, 0.025, "#bf{Geant4-DNA}#kern[0.1]{#it{Simulation}}");
+    //lModel->DrawLatex(watermarkX, 0.008, "Geometry Comparison (Construction Time)");
     garbage.push_back(lModel);
 
     // Р“РѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅР°СЏ Р»РµРіРµРЅРґР° СЃРїСЂР°РІР° РІРЅРёР·Сѓ (РІС‹СЂРѕРІРЅРµРЅР° РїРѕ РїСЂР°РІРѕР№ РіСЂР°РЅРёС†Рµ СЂР°РјРєРё РіСЂР°С„РёРєР°: 1.0 - 0.03 = 0.97) [5]
-    double legendX2 = 0.97;
+    /*double legendX2 = 0.97;
     double legendX1 = legendX2 - 0.55; 
-    TLegend* legend = new TLegend(legendX1, 0.01, legendX2, 0.045);
-    legend->SetTextSize(0.018);
+    double legendY2 = 0.045;
+    double legendY1 = 0.01;*/
+    double legendX2 = 1.;
+    double legendX1 = 0.863; 
+    double legendY2 = 0.3;
+    double legendY1 = 0.75;
+    TLegend* legend = new TLegend(legendX1, legendY1, legendX2, legendY2);
+    legend->SetTextSize(0.025);
     legend->SetTextFont(42);
     legend->SetBorderSize(0);
     legend->SetFillStyle(0);
-    legend->SetNColumns(targetMethods.size());
+    //legend->SetNColumns(targetMethods.size());
 
     for (const auto& method : targetMethods) {
         TBox* dummyBox = new TBox();
@@ -357,7 +365,7 @@ void plotGeometryComparisonTime() {
     c->Update();
 
     fs::create_directories("output/plots/geometry_comparison");
-    std::string outputPath = "output/plots/geometry_comparison/Geometry_Build_Time_Comparison.svg";
+    std::string outputPath = "output/plots/geometry_comparison/Geometry_Build_Time_Comparison.eps";
     c->SaveAs(outputPath.c_str());
 
     delete c;

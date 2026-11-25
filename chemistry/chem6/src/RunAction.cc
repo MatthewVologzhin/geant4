@@ -41,14 +41,16 @@
 // Authors: W. G. Shin and S. Incerti (CENBG, France)
 
 #include "RunAction.hh"
-
 #include "Run.hh"
+#include "PrimaryGeneratorAction.hh"
 
 #include "G4Run.hh"
 #include "G4RunManager.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4UnitsTable.hh"
 #include "G4DNAChemistryManager.hh"
+#include "G4EmCalculator.hh"
+#include "G4NistManager.hh"
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo.....
 
@@ -120,12 +122,25 @@ void RunAction::EndOfRunAction(const G4Run *run) {
       LET_square = std::sqrt(variance);
     }
 
+    const auto* pGenParticle = static_cast<const PrimaryGeneratorAction*>(G4RunManager::GetRunManager()->GetUserPrimaryGeneratorAction());
+
+    double fSP;
+    if (pGenParticle){
+      G4ParticleDefinition* pParticle = pGenParticle->GetParticleGun()->GetParticleDefinition();
+      G4double energy = pGenParticle->GetParticleGun()->GetParticleEnergy();
+      G4Material* pMat = G4NistManager::Instance()->FindOrBuildMaterial("G4_WATER");
+      G4EmCalculator fpEmCalc;
+      fSP = fpEmCalc.ComputeElectronicDEDX(energy, pParticle, pMat);
+    }
+
     if (nOfEvent > 1) {
       out << std::setw(12) << "LET" << std::setw(12) << LET_mean << std::setw(12) << "LET_SD"
-          << std::setw(12) << LET_square / (nOfEvent - 1) << '\n';
+          << std::setw(12) << LET_square / (nOfEvent - 1) 
+          << std::setw(12) << "SP" << std::setw(12) <<  fSP << std::setw(12) << '\n';
     } else {
       out << std::setw(12) << "LET" << std::setw(12) << LET_mean << std::setw(12) << "LET_SD"
-          << std::setw(12) << LET_square << '\n';
+          << std::setw(12) << LET_square
+          << std::setw(12) << "SP" << std::setw(12) << fSP << std::setw(12) << '\n';
     }
 
     masterScorer->OutputAndClear();

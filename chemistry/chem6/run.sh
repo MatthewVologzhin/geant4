@@ -1,27 +1,40 @@
 #!/bin/bash
-# run.sh (находится в корне проекта)
+# ==============================================================================
+# run.sh
+# Main execution script: venv preparation, parser execution, and C++ compilation.
+# ==============================================================================
 
-# 1. Создаем структуру папок (если они вдруг были удалены)
-# Это гарантирует, что Кондору будет куда писать логи и результаты
-mkdir -p results/logs
-mkdir -p results/output
-mkdir -p results/data
+set -e # Exit immediately if a command exits with a non-zero status
 
-echo "--- Подготовка завершена ---"
+# 1. Load global project configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/project_config.sh" ]; then
+    source "${SCRIPT_DIR}/project_config.sh"
+else
+    echo "ERROR: project_config.sh not found!" >&2
+    exit 1
+fi
 
-# 2. (Опционально) Очистка старых логов перед новым запуском
-# Чтобы не путаться в файлах job_3646... и job_3647...
-# rm -f results/logs/*
+echo "=== PROJECT PREPARATION AND EXECUTION ==="
 
-# 3. Запуск всей цепочки через DAG-менеджер
-# Мы запускаем из корня, указывая путь к файлу внутри папки jobs/
-condor_submit_dag jobs/job_flow.dag
+# 2. Create required directory structure
+mkdir -p "${PROJECT_ROOT}/output/logs"
+mkdir -p "${PROJECT_ROOT}/output/plots"
+mkdir -p "${PROJECT_ROOT}/output/data"
 
-echo "-------------------------------------------------------"
-echo "Workflow запущен!"
-echo "1. Сначала выполнятся расчеты Geant4 (из jobs/submit.sub)"
-echo "2. Затем автоматически запустится сборка (из scripts/merge_results.sh)"
-echo ""
-echo "Мониторинг очереди: condor_q"
-echo "Мониторинг процесса сборки: tail -f results/logs/merge.out"
-echo "-------------------------------------------------------"
+# 5. Compile C++ Geant4 application
+chmod +x "${PROJECT_ROOT}/scripts/compile_fast.sh"
+bash "${PROJECT_ROOT}/scripts/compile_fast.sh"
+
+echo "=== PREPARATION COMPLETED SUCCESSFULLY ==="
+
+# 6. Simulation execution
+# If HTCondor is available on the machine, submit the cluster jobs
+if command -v condor_submit >/dev/null 2>&1; then
+    echo "--> HTCondor detected. Submitting jobs..."
+    condor_submit "${PROJECT_ROOT}/jobs/geant4.sub"
+    watch -n 2 condor_q
+else
+    echo "WARNING: HTCondor is not installed on this system."
+    echo "To run simulations locally, execute: ./chem6 run_[JOB_ID].mac"
+fi

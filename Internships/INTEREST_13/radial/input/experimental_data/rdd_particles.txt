@@ -1,0 +1,12 @@
+# name particleLabel Z A energy energyUnit xAxisMin xAxisMax yAxisMin yAxisMax yAxisResMin yAxisResMax isLogX expRelErrType expDataFile dataAuthors
+proton proton 1 1 1.0 MeV exp exp exp exp -4.2 0.8 0 threshold input/experimental_data/rdd_proton_1MeV.txt Wingate & Baum (1976)
+proton proton 1 1 3.0 MeV exp exp exp exp -4.2 0.8 0 threshold input/experimental_data/rdd_proton_3MeV.txt Wingate & Baum (1976)
+deuteron deuteron 1 2 1.0 MeV exp exp exp exp -4.2 0.8 0 threshold input/experimental_data/rdd_deuteron_1MeV.txt ???
+deuteron deuteron 1 2 2.0 MeV exp exp exp exp -0.5 0.8 0 threshold input/experimental_data/rdd_deuteron_2MeV.txt ???
+alpha alpha 2 4 1.0 MeV exp exp exp exp -5.0 0.8 0 threshold input/experimental_data/rdd_alpha_1MeV.txt Wingate & Baum (1976)
+alpha alpha 2 4 2.0 MeV exp exp exp exp -5.0 0.8 0 threshold input/experimental_data/rdd_alpha_2MeV.txt Wingate & Baum (1976)
+alpha alpha 2 4 3.0 MeV exp exp exp exp -5.0 0.8 0 threshold input/experimental_data/rdd_alpha_3MeV.txt Wingate & Baum (1976)
+C12 C12 6 12 24.022 MeV exp exp 0.5e-1 exp -1.3 0.8 1 fixed0.10 input/experimental_data/rdd_C12_24p022MeV.txt Fain, et al (1973)
+O16 O15 8 16 41.1 MeV exp exp exp exp -1.7 0.8 1 fixed0.15 input/experimental_data/rdd_O16_41p1MeV.txt ???
+Ne20 Ne20 10 20 163.46 MeV exp exp 5e-3 exp -1.7 0.8 1 fixed0.10 input/experimental_data/rdd_Ne20_163p46MeV.txt Fain, et al (1973)
+Ne20 Ne20 10 20 7540.0 MeV exp exp exp exp -1.7 0.8 1 fixed0.15 input/experimental_data/rdd_Ne20_7540MeV.txt Varma and Baum (1980)

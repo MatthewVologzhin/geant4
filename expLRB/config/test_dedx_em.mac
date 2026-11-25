@@ -1,0 +1,38 @@
+# ==============================================================================
+# Этап 5: EM_Opt4-референс для сравнения dE/dx с config/test_dedx.mac (DNA_Opt6).
+# 20Ne (800 МэВ) в сплошном водяном слое 10 мкм, стандартная EM-физика без DNA.
+# ==============================================================================
+/control/verbose 1
+/run/verbose 1
+/run/numberOfThreads 2
+/run/printProgress 100
+
+# --- Физика (строго PreInit) ---
+/physics/setHadronic QGSP_BIC_HP
+/physics/enableHadronic true
+/physics/setEM EM_Opt4
+/physics/enableDNAActivator false
+
+# --- Выходной файл ---
+/bio/output/fileName output/root/test_dedx_em.root
+
+# --- Мир ---
+/expLRB/det/setWorldZ 100 mm
+
+# --- Водяной слой 10 мкм: сплошная среда без клеток (nCells = 0) ---
+/bio/score/target medium
+/bio/layer/create G4_WATER 0
+/bio/layer/size 14 14 0.010 mm
+/bio/layer/pos 0 0 0 mm
+
+# Стандартная EM-физика (EM_Opt4) в объёме мишени
+/bio/layer/physics none
+
+/run/initialize
+
+# --- Пучок: 20Ne, 800 МэВ, вдоль +Z ---
+/gun/particle ion
+/gun/ion 10 20 10
+/gun/energy 800 MeV
+
+/run/beamOn 1000

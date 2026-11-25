@@ -54,10 +54,12 @@ DetectorConstruction::DetectorConstruction(PhysicsList* pl)
   fDetectorMessenger = new DetectorMessenger(this, pl);
 
   // World size
-  fWorldRadius = 1*um;
-  fWorldOffsetLength = 0;
+  fWorldRadius = 10*um;
+  fBufferRadius = 10*um;
+  fWorldOffsetLength = 0; 
 
   // Cylinders
+  fMaxScoringRadius = 1*um;
   fCylinderLength = 10*um;
   fCylinderMinRadius = 1e-1*nm;
   fCylinderNumber = 20;
@@ -136,11 +138,11 @@ G4VPhysicalVolume* DetectorConstruction::Construct()
   G4double rIn; G4double rOut;
   for (G4int i = 0; i < fCylinderNumber; i++) {
     if (fCylinderLog == true){
-      rIn = fCylinderMinRadius*std::pow(fWorldRadius/fCylinderMinRadius, (G4double)i/fCylinderNumber);
-      rOut = fCylinderMinRadius*std::pow(fWorldRadius/fCylinderMinRadius, (G4double)(i+1)/fCylinderNumber);
+      rIn = fCylinderMinRadius*std::pow(fMaxScoringRadius/fCylinderMinRadius, (G4double)i/fCylinderNumber);
+      rOut = fCylinderMinRadius*std::pow(fMaxScoringRadius/fCylinderMinRadius, (G4double)(i+1)/fCylinderNumber);
     } else {
-      rIn = (fWorldRadius-fCylinderMinRadius)/fCylinderNumber*i;
-      rOut = (fWorldRadius-fCylinderMinRadius)/fCylinderNumber*(i+1);
+      rIn = fCylinderMinRadius + (fMaxScoringRadius-fCylinderMinRadius)/fCylinderNumber*i;
+      rOut = fCylinderMinRadius + (fMaxScoringRadius-fCylinderMinRadius)/fCylinderNumber*(i+1);
     }
 
     G4Tubs* solidCylinder =
@@ -177,9 +179,10 @@ void DetectorConstruction::SetMaterial(const G4String& materialChoice)
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
 
-void DetectorConstruction::SetWorldRadius(const G4double& value)
+void DetectorConstruction::SetMaxScoringRadius(const G4double& value)
 {
-  fWorldRadius = value;
+  fMaxScoringRadius = value;
+  fWorldRadius = value + fBufferRadius;
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

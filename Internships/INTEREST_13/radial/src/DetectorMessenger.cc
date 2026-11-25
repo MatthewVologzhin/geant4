@@ -73,12 +73,12 @@ DetectorMessenger::DetectorMessenger(DetectorConstruction* det, PhysicsList* pl)
   fTrackingCutCmd->AvailableForStates(G4State_PreInit);
   fTrackingCutCmd->SetToBeBroadcasted(false);
 
-  fWorldRadiusCmd = new G4UIcmdWithADoubleAndUnit("/radial/setWorldRadius",this);
-  fWorldRadiusCmd->SetGuidance("Set size of the World");
-  fWorldRadiusCmd->SetParameterName("Size",false);
-  fWorldRadiusCmd->SetRange("Size>0.");
-  fWorldRadiusCmd->SetUnitCategory("Length");
-  fWorldRadiusCmd->AvailableForStates(G4State_PreInit);
+  fMaxScoringRadiusCmd = new G4UIcmdWithADoubleAndUnit("/radial/setMaxScoringRadius",this);
+  fMaxScoringRadiusCmd->SetGuidance("Set size of the Detector");
+  fMaxScoringRadiusCmd->SetParameterName("Size",false);
+  fMaxScoringRadiusCmd->SetRange("Size>0.");
+  fMaxScoringRadiusCmd->SetUnitCategory("Length");
+  fMaxScoringRadiusCmd->AvailableForStates(G4State_PreInit);
 
   fWorldOffsetLengthCmd = new G4UIcmdWithADoubleAndUnit("/radial/setWorldOffsetLength",this);
   fWorldOffsetLengthCmd->SetGuidance("Set offset in length for the World");
@@ -123,7 +123,7 @@ DetectorMessenger::~DetectorMessenger()
   delete fMatCmd;
   delete fPhysCmd;
   delete fTrackingCutCmd;
-  delete fWorldRadiusCmd;
+  delete fMaxScoringRadiusCmd;
   delete fWorldOffsetLengthCmd;
   delete fCylinderLengthCmd;
   delete fCylinderNumberCmd;
@@ -142,8 +142,8 @@ void DetectorMessenger::SetNewValue(G4UIcommand* command, G4String newValue)
   if (command == fTrackingCutCmd)
     fPhysList->SetTrackingCut(fTrackingCutCmd->GetNewBoolValue(newValue));
 
-  if (command == fWorldRadiusCmd)
-    fDetector->SetWorldRadius(fWorldRadiusCmd->GetNewDoubleValue(newValue));
+  if (command == fMaxScoringRadiusCmd)
+    fDetector->SetMaxScoringRadius(fMaxScoringRadiusCmd->GetNewDoubleValue(newValue));
 
   if (command == fCylinderLengthCmd)
     fDetector->SetCylinderLength(fCylinderLengthCmd->GetNewDoubleValue(newValue));

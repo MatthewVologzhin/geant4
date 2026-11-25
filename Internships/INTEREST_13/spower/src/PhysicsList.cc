@@ -42,10 +42,6 @@
 #include "PhysicsListMessenger.hh"
 #include "G4EmParameters.hh"
 
-#include "G4EmDNAPhysics_stationary.hh"
-#include "G4EmDNAPhysics_stationary_option2.hh"
-#include "G4EmDNAPhysics_stationary_option4.hh"
-#include "G4EmDNAPhysics_stationary_option6.hh"
 #include "G4EmDNAPhysics.hh"
 #include "G4EmDNAPhysics_option2.hh"
 #include "G4EmDNAPhysics_option4.hh"
@@ -129,26 +125,6 @@ void PhysicsList::AddPhysicsList(const G4String& name)
     delete fEmPhysicsList;
     fEmPhysicsList = new G4EmDNAPhysics_option8();
   }
-  else if (name == "dna_stat") {
-    fEmName = name;
-    delete fEmPhysicsList;
-    fEmPhysicsList = new G4EmDNAPhysics_stationary();
-  }
-  else if (name == "dna_stat_opt2") {
-    fEmName = name;
-    delete fEmPhysicsList;
-    fEmPhysicsList = new G4EmDNAPhysics_stationary_option2();
-  }
-  else if (name == "dna_stat_opt4") {
-    fEmName = name;
-    delete fEmPhysicsList;
-    fEmPhysicsList = new G4EmDNAPhysics_stationary_option4();
-  }
-  else if (name == "dna_stat_opt6") {
-    fEmName = name;
-    delete fEmPhysicsList;
-    fEmPhysicsList = new G4EmDNAPhysics_stationary_option6();
-  } 
   else if (name == "std_opt4") {
     fEmName = name;
     delete fEmPhysicsList;

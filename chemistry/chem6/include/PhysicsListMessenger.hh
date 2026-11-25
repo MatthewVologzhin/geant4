@@ -38,8 +38,8 @@
 // Int. J. Model. Simul. Sci. Comput. 1 (2010) 157-178
 // The Geant4-DNA web site is available at http://geant4-dna.org
 
-#ifndef CHEM6_PhysicsListMessenger_h
-#define CHEM6_PhysicsListMessenger_h 1
+#ifndef CHEM6_PHYSICSLISTMESSENGER_H
+#define CHEM6_PHYSICSLISTMESSENGER_H
 
 #include "G4UImessenger.hh"
 #include "G4UIcmdWithAString.hh"

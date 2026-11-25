@@ -5,6 +5,11 @@ which **must** added in reverse chronological order (newest at the top).
 It must **not** be used as a substitute for writing good git commit messages!
 
 -------------------------------------------------------------------------------
+## 2026-04-28 Hoang Tran (chem6-V11-04-04)
+- Fixed the FTE failure in messenger
+
+## 2026-04-17 Sebastien Incerti (chem6-V11-04-03)
+- Reduction of the number of DNA physics constructors in the perspective of Geant4 12
 
 ## 2026-02-03 Shogo Okada (chem6-V11-04-02)
 - Modified PrimaryKiller in order to terminate transportation for ions as well

@@ -104,13 +104,13 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
       G4AnalysisManager* analysisManager = G4AnalysisManager::Instance();
 
       // fill ntuple
-      analysisManager->FillNtupleDColumn(2, 0, eventID);
+      /*analysisManager->FillNtupleDColumn(2, 0, eventID);
       analysisManager->FillNtupleDColumn(2, 1, flagProcess);
       analysisManager->FillNtupleDColumn(2, 2, x);
       analysisManager->FillNtupleDColumn(2, 3, y);
       analysisManager->FillNtupleDColumn(2, 4, z);
       analysisManager->FillNtupleDColumn(2, 5, dE);
-      analysisManager->AddNtupleRow(2);
+      analysisManager->AddNtupleRow(2);*/
 
       // histogram
       if (flagProcess == 3 && (G4UniformRand() < detectorEfficiency)) {

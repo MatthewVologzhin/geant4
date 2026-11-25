@@ -123,6 +123,8 @@ void SteppingAction::UserSteppingAction(const G4Step* step)
 
     // IONS (above helium)
     if (charge > 2) maxNumberOfSteps = 10000;
+    //if (step->GetTrack()->GetParticleDefinition() == instance->GetIon("deuteron")) 
+    maxNumberOfSteps = 20000; // Добавил, чтобы проверить дейтрон
 
     // ALL
 
