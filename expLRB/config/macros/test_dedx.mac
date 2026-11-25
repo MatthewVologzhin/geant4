@@ -14,7 +14,8 @@
 /bio/score/profile standard
 /bio/score/target medium
 # --- World ---
-/expLRB/det/setWorldZ 100 mm
+/expLRB/det/setWorldXY 20 mm
+/expLRB/det/setWorldZ 1 mm
 # --- Materials (LRB JINR data) ---
 # --- Beam tract ---
 # --- Biolayer ---
