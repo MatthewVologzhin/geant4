@@ -19,3 +19,15 @@ description: Разработка, отладка, настройка физик
    - Быстрый smoke (вода, без клеток): `./build/expLRB -m config/macros/test_dedx.mac --events 20 --threads 2`. Проверь отсутствие `G4Exception`/`Fatal`, печать seed и профиля (`=== [expLRB] Scoring profile: ... ===`), завершение `Run completed`.
    - Для проверки схемы профиля: `--profile minimal|standard|full` и сверь набор объектов в выходном `.root` коротким `root -l -b -q` one-liner.
 6. **Очистка неиспользуемого кода:** прежде чем удалять любой файл, проверь `grep -rn` по всему `src/`, `include/`, `main.cc` и `CMakeLists.txt`.
+
+## Кластерные грабли (Geant4 на HTCondor-пуле)
+- **Число потоков:** макросное `/run/numberOfThreads` перекрывает CLI. Чтобы управлять потоками,
+  выставляй `G4FORCENUMBEROFTHREADS` (делается в `job_run_one.sh` из `THREADS` и в `main.cc` из
+  `--threads`).
+- **Geant4-DNA CPA100:** штатные сборки Geant4 11.4 на кластере падают в
+  `G4DNACPA100{Elastic,Excitation,Ionisation}Model` при работе с не-`G4_WATER` материалами
+  (`BuildMaterialWithNewDensity` → `G4_WATER_LAYER`/`G4_WATER_N/C/M`). Причина — «CPA100 loads data
+  for material index 0 only». Фикс: брать материал через `GetBaseMaterial()` в DNA-моделях
+  (5 файлов, см. `PROJECT_MEMORY.md` §8) и пересобрать Geant4. Симптом: SIGSEGV (139) или abort (134)
+  на первом событии; EM-сценарии при этом работают.
+- **CRLF в shebang** скриптов → HTCondor `Failed to execute … errno=2`. Проверяй `sed -n 1p file | cat -A`.

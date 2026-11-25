@@ -37,3 +37,20 @@ description: Создание и проверка конфигов config/runs.c
    - Число событий задаётся `/bio/run/setEvents` из конфига и перекрывается CLI `--events` (планировщик использует именно `--events`).
    - В статических `.mac` **не прописывай** жёсткий `/random/setSeeds` — должен работать автоматический случайный seed из `main.cc` (либо явный `--seed` планировщика для каждой задачи массива).
    - Жёсткий `/random/setSeeds <s1> <s2>` допустим только в отладочном макросе для воспроизведения конкретного бага.
+
+## Кластер HTCondor (особенности пула)
+- **`$HOME` на счётных узлах read-only.** Макрос/скрипт не может писать в общий репозиторий. Чанк
+  пишется в песочницу узла (корень: `<scenario>_<proc>.root`) и возвращается через
+  `transfer_output_files` + `transfer_output_remaps` (абсолютный путь в `output/raw`).
+- **Режим HTCondor:** `should_transfer_files=YES`, `transfer_executable=False` (запуск по абсолютному
+  пути), `getenv=True`. «Общий ФС»-режим не матчится (у узлов разные `FileSystemDomain`).
+- **CRLF запрещён:** `expLRB/.gitattributes` форсирует `eol=lf`; на клоне `git config core.autocrlf false`.
+  CRLF в shebang → HTCondor `errno=2 No such file or directory`.
+- **Память/диск** задаются на сценарий: `config/runs.conf` `[sample:…] memory/disk` (МБ). Без
+  `request_memory` HTCondor даёт ~128 МБ и задача уходит в `H`.
+- **Число событий/потоки:** `EVENTS_TOTAL`/`EVENTS_PER_JOB`/`THREADS` (env). Потоки принудительно —
+  `G4FORCENUMBEROFTHREADS` (перекрывает `/run/numberOfThreads` из макроса).
+- **`printProgress`** динамический (`gen_macros.sh`): `max(10, ceil(events/progress-lines))`.
+- **Монитор:** `jobs/monitor.py` (per-job, `condor_tail`), `jobs/monitor.sh` (по сценариям).
+- **DNA_Opt6** требует пропатченной Geant4 (`GetBaseMaterial()` в DNA-моделях) — иначе падение на
+  кастомной воде (см. `PROJECT_MEMORY.md` §8).

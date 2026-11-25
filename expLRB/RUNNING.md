@@ -205,18 +205,25 @@ MEMORY=16000 jobs/submit.sh monolayer_filt_cells_had
 `held`. Фактическое потребление смотрите так: `condor_q -af ClusterId ProcId MemoryUsage` (во время),
 `condor_history -af ClusterId ProcId MemoryUsage` (после).
 
-### HTCondor: режим передачи файлов
+### HTCondor: особенности этого пула
 
-На пуле с `condor` счётные узлы имеют разные `FileSystemDomain`, поэтому «общий FS»-режим
-(`should_transfer_files = NO`) не матчится (`TARGET.FileSystemDomain == MY.FileSystemDomain` → 0).
-`jobs/htcondor.sub.in` поэтому использует **transfer-режим**: `should_transfer_files = YES`,
-`transfer_executable = False` (скрипт берётся по абсолютному пути — репозиторий виден на узле),
-`getenv = True` (проброс Geant4-окружения), а полученный чанк из `output/raw` переносится домой
-(`transfer_output_files`). Перед отправкой удобно один раз подгрузить окружение в сессию:
-```bash
-source config/geant4.conf && source "$GEANT4_PREFIX/bin/geant4.sh"
-```
-Если задача всё же в `held` — `condor_q -held` покажет причину.
+Счётные узлы имеют **разные `FileSystemDomain`** и **`$HOME` только для чтения**. Поэтому
+`jobs/htcondor.sub.in` использует **transfer-режим** (`should_transfer_files = YES`):
+- `transfer_executable = False` — скрипт запускается по абсолютному пути (репозиторий виден на чтение);
+- `getenv = True` — проброс Geant4-окружения;
+- чанк пишется в **песочницу** (корень: `<scenario>_<proc>.root`), затем возвращается домой
+  `transfer_output_files` + `transfer_output_remaps` (абсолютный путь в `output/raw/`) — иначе
+  HTCondor кладёт файл по basename вне `output/raw`.
+- Перед отправкой подгрузите окружение: `source config/geant4.conf && source "$GEANT4_PREFIX/bin/geant4.sh"`.
+
+Типичные проблемы:
+- `H` (`condor_q -held`): чаще память → поднять `MEMORY=`/`[sample:…] memory`; либо
+  `Failed to execute … errno=2 No such file or directory` → **CRLF в shebang** (см. ниже).
+- **CRLF:** при `core.autocrlf` на удалённом клоне `git pull` превращает скрипты в CRLF и ломает
+  shebang. В репозитории есть `expLRB/.gitattributes` (`eol=lf`); на кластере:
+  `git config core.autocrlf false` и, при необходимости, `sed -i 's/\r$//' jobs/*.sh scripts/*.sh`.
+- **DNA-падение (CPA100):** если Geant4-сборка не пропатчена (см. `PROJECT_MEMORY.md` §8), `DNA_Opt6`
+  падает на кастомной воде; нужна сборка с `GetBaseMaterial()` в DNA-моделях.
 
 ### Мониторы прогресса и ETA
 

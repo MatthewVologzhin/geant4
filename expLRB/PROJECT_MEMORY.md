@@ -51,3 +51,51 @@
 - **Кластер:** `jobs/submit.sh` читает `manifest.tsv`, поддерживает `--dry-run`; `job_run_one.sh` передаёт `--events` (без `sed` макроса). Планировщик — авто-выбор SLURM/HTCondor.
 - **`plot.C`:** сценарии — из `config/plot_scenarios.inc`, косметика — из `config/analysis.conf`; отсутствующие `.root` пропускаются, «ни одного сценария» → жёсткая остановка.
 - **Размещение в репозитории `geant4`:** `expLRB` — обычная отслеживаемая подпапка (в родительский `.gitignore` добавлено `!expLRB/`); `expLRB/.gitignore` исключает `build/`, `output/`, `*.root`, `logs/`, `*.so`/`*.d`/`*_ACLiC_dict*` и скретч-дампы.
+
+## 8. Кластер HTCondor — грабли (проверено 2026-11)
+
+Раздел про HTCondor-пул группы (адреса/доступ — вне репозитория, в документации не хранятся).
+Дополняет §6 (кластер).
+
+- **$HOME на вычислительных узлах read-only.** Задача (процесс на узле) не может писать в общий
+  репозиторий: попытки `tee logs/...` и создания `output/raw/<...>.root` дают
+  `Permission denied`/`Analysis_W001 Cannot create file`. Поэтому:
+  - чанки и любые выходы пишем в **песочницу** узла;
+  - логи и чанк возвращаем **через HTCondor**.
+- **HTCondor: FS-домены узлов разные** → режим «общего ФС» (`should_transfer_files = NO`) не матчится
+  (`TARGET.FileSystemDomain == MY.FileSystemDomain` → 0). Используем transfer-режим:
+  `should_transfer_files = YES`, `transfer_executable = False` (скрипт запускается по абсолютному
+  пути — репозиторий виден на чтение), `getenv = True` (проброс Geant4-окружения).
+- **Возврат чанка:** HTCondor кладёт `transfer_output_files` **по basename** (теряет подкаталоги).
+  Рабочая схема (как в chem6): писать чанк в **корень песочницы** (`<scenario>_<proc>.root`), а
+  `transfer_output_remaps = "<name> = /abs/repo/output/raw/<name>"` (абсолютное назначение).
+  Тогда файл оказывается ровно в `output/raw/`.
+- **CRLF ломает shebang.** Если на удалённом клоне включён `core.autocrlf`, `git pull` превращает
+  `job_run_one.sh` в CRLF → shebang `#!/usr/bin/env bash\r` → ядро не находит интерпретатор и HTCondor
+  даёт `Failed to execute ... errno=2 No such file or directory`. Меры: `expLRB/.gitattributes`
+  (`*.sh/*.py/*.in/*.mac/*.conf text eol=lf`), на кластере `git config core.autocrlf false`,
+  при необходимости `sed -i 's/\r$//' jobs/*.sh scripts/*.sh`.
+- **Geant4-DNA `DNA_Opt6` (CPA100) падает на кастомной воде.** На «inter» штатные сборки Geant4
+  11.4 (ref01/ref02/ref08/ref09) падают (SIGSEGV/abort) в `G4DNACPA100Elastic/Excitation/Ionisation
+  Model` при работе с не-`G4_WATER` материалами (наш `G4_WATER_LAYER` = `BuildMaterialWithNewDensity`).
+  Это известный баг: «CPA100 models only load data for material index 0». Фикс — брать материал через
+  `GetBaseMaterial()` в DNA-моделях. На рабочей сборке (WSL2 ref01) это уже пропатчено; на кластере
+  нужно скопировать 5 файлов `source/processes/electromagnetic/dna/{models/src/G4DNACPA100{Elastic,
+  Excitation,Ionisation}Model.cc,models/src/G4DNAELSEPAElasticModel.cc,utils/src/G4DNAMolecularMaterial.cc}`
+  и пересобрать Geant4 (`~/build_geant4.sh`, инкрементально из `/tmp/geant4_build_<pid>`).
+- **`G4FORCENUMBEROFTHREADS`** перекрывает `/run/numberOfThreads` из макроса. `job_run_one.sh` ставит
+  его из `THREADS` (кластерный дефолт 1), `main.cc` — из `--threads`. Иначе макрос (10 потоков) уводит
+  задачу в переподписку CPU.
+- **`printProgress` динамический:** `gen_macros.sh` считает `max(10, ceil(events/progress-lines))`
+  (по умолчанию `progress-lines=500`), чтобы число строк прогресса было ограничено; перекрывается
+  явными `[run:…] print-progress`/`progress-lines`.
+- **Мониторинг:** `jobs/monitor.py` (per-job: JOB ID/STAT/PROGRESS/EVENTS/ELAPSED/ETA/SPEED, сводка
+  батча). Живой прогресс — через `condor_tail` (т.к. `.out` при read-only home появляется только
+  после завершения); общее число событий — из атрибута `+ExpLRBEvents` (иначе `???`). `jobs/monitor.sh`
+  — сводка по сценариям (логи/очередь). Refresh: `--refresh`/`--interval`.
+- **Тест `test_dedx` ускорен:** для dE/dx-валидации мир уменьшен (`[geometry:dedx] world-xy=20 mm,
+  world-z=1 mm`) — на депозит в слое не влияет (`mean Edep_Total ≈ 2.5 МэВ`, `dE/dx ≈ 251 кэВ/µm`),
+  но резко сокращает трекинг вторичек в вакууме. Для боевых сценариев мир остаётся 10 см.
+- **Память задачи:** задаётся на сценарий в `config/runs.conf` `[sample:…] memory/disk` (МБ) →
+  `request_memory/request_disk`/`--mem`. Без `request_memory` HTCondor выдаёт ~128 МБ и задача
+  уходит в `H`.

@@ -26,7 +26,8 @@
   - `EventAction.*`, `RunAction.*`, `RunMessenger.*` — заполнение `BioData` (`TTree`), гистограмм `H1`, `G4Accumulable` сводка дозы; `/bio/output/fileName`, `/bio/run/setEvents`, `/bio/run/beamOn`.
   - `PrimaryGeneratorAction.*`, `PrimaryGeneratorMessenger.*` — пучок (`/expLRB/gun/*`).
   - **НЕ ТРОГАТЬ И НЕ РЕФАКТОРИТЬ:** `include/nanoflann.hpp` (сторонний header-only v1.14.0, не тратить на него контекст).
-- Скрипты/задания: `scripts/{build.sh,gen_macros.sh,merge_all.sh,merge_runs.sh}`, `jobs/{submit.sh,slurm_array.sh,htcondor.sub.in,job_run_one.sh,probe_schedulers.sh}`.
+- Скрипты/задания: `scripts/{build.sh,gen_macros.sh,merge_all.sh,merge_runs.sh}`, `jobs/{submit.sh,slurm_array.sh,htcondor.sub.in,job_run_one.sh,probe_schedulers.sh,monitor.sh,monitor.py}`.
+- `.gitattributes` — `eol=lf` для скриптов (иначе CRLF ломает shebang на удалённых клонах).
 - Анализ: `plot.C` (сценарии — из `config/plot_scenarios.inc`, косметика — из `config/analysis.conf`), `monolayer.mac`/`test.mac`/`vis.mac` — legacy.
 
 ## 3. Сборка и тестовые команды
@@ -63,6 +64,9 @@ jobs/submit.sh --dry-run
 6. **СОХРАНЕНИЕ ТОКЕНОВ:** не читай целиком `include/nanoflann.hpp` и сторонние крупные `.root`/`.csv` файлы; для инспекции `.root` используй короткий `root -l -b -q` one-liner.
 7. **ОБЯЗАТЕЛЬНЫЙ СЛУЧАЙНЫЙ SEED ГПСЧ:** при каждом запуске бинарника автоматически генерируется независимый положительный seed (`std::random_device` + `std::uniform_int_distribution<long>(1, 2000000000L)`) с вызовом `G4Random::setTheSeed(seed)` **до** `/bio/run/beamOn` и обязательной печатью сида в `G4cout`. Переопределение — через CLI `--seed` (кластерные массивы) или `/random/setSeeds`.
 8. **MT-СХЕМА АНАЛИЗА:** `G4MTRunManager::SetUserInitialization` строит мастер-`RunAction` немедленно, поэтому скоринг-профиль резолвится в `main.cc` до создания run manager; мастер- и worker-потоки обязаны иметь идентичную схему дерева.
+9. **КЛАСТЕР HTCondor:** на вычислительных узлах `$HOME` **read-only** → чанки писать в песочницу и возвращать через `transfer_output_files` + `transfer_output_remaps` (абсолютный путь в `output/raw`); параметры `should_transfer_files=YES`, `transfer_executable=False`, `getenv=True` уже в `jobs/htcondor.sub.in`. Живой прогресс — `jobs/monitor.py` (`condor_tail`); логи `.out` появляются в репозитории только по завершении задачи. Учётные данные/адреса доступа в репозитории **не хранить**.
+10. **CRLF в скриптах запрещён:** в репозитории `expLRB/.gitattributes` форсирует `eol=lf`; на удалённом клоне `git config core.autocrlf false` (иначе shebang становится `bash\r` и HTCondor даёт `errno=2 No such file or directory`).
+11. **Geant4-DNA `DNA_Opt6` требует пропатченной Geant4:** штатные сборки 11.4 на кластере падают в `G4DNACPA100*Model` на кастомной воде (баг «CPA100 loads data for material index 0 only»). Нужна сборка с `GetBaseMaterial()` в DNA-моделях; детали — `PROJECT_MEMORY.md` §8.
 
 ## 5. Специализированные навыки (`.agents/skills/`)
 - Правка C++ кода Geant4 11.4, `PhysicsList`, `SD`, MT, скоринг-профили и пересборка -> `.agents/skills/geant4-cpp-dev/SKILL.md`

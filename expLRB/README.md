@@ -160,9 +160,9 @@ jobs/submit.sh --dry-run monolayer_nofilt_cells_had
 # Отправить (авто-выбор SLURM/HTCondor по свободным CPU), по умолчанию 1 поток/задача
 EVENTS_PER_JOB=50000 jobs/submit.sh
 
-# Монитор прогресса и ETA (на login-ноде; только читает логи)
-EVENTS_TOTAL=1000000 EVENTS_PER_JOB=50000 jobs/monitor.sh        # живой watch
-jobs/monitor.sh --once                                           # один снимок
+# Мониторы прогресса/ETA (на login-ноде; только читают состояние/логи)
+jobs/monitor.py --refresh 5            # HTCondor: по задачам (JOB ID/ELAPSED/ETA/SPEED)
+EVENTS_TOTAL=1000000 EVENTS_PER_JOB=50000 jobs/monitor.sh --interval 30   # сводка по сценариям
 
 # После завершения — объединить чанки (только независимые сиды!)
 # merged по умолчанию кладётся в output/root/, откуда его читает plot.C
@@ -171,8 +171,15 @@ scripts/merge_all.sh <scenario> output/root output/raw
 
 `jobs/submit.sh` берёт список сценариев из `config/macros/manifest.tsv`; каждый чанк
 запускается с собственным seed через `--seed` и собственным числом событий через `--events`.
-`jobs/monitor.sh` оценивает прогресс/ETA по логам. После объединения в
+`jobs/monitor.py` (HTCondor: живой прогресс через `condor_tail`) и `jobs/monitor.sh`
+(сводка по сценариям) показывают прогресс/ETA. После объединения в
 `output/root/<scenario>.root` анализ запускается как обычно: `root -l -q 'plot.C+'`.
+
+**Особенности HTCondor-пула** (подробнее — `RUNNING.md`, `PROJECT_MEMORY.md` §8): на счётных узлах
+`$HOME` read-only — чанк пишется в песочницу и возвращается через `transfer_output_files` +
+`transfer_output_remaps` (в `output/raw`); скрипты в репозитории форсируются в LF
+(`.gitattributes`, иначе CRLF ломает shebang); Geant4-DNA `DNA_Opt6` требует сборки с
+`GetBaseMaterial()` в DNA-моделях.
 
 ---
 
