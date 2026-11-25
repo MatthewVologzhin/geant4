@@ -36,12 +36,7 @@ mkdir -p "$(dirname "$OUT")"
 # (Geant4 honours G4FORCENUMBEROFTHREADS over the UI command).
 export G4FORCENUMBEROFTHREADS="$THREADS"
 
-# Mirror the Geant4 output into a shared log on the repository (visible from compute
-# nodes) so jobs/monitor.sh can read live progress even when HTCondor returns the
-# captured stdout only at job completion.
-LOG_BASE="$(basename "$OUT" .root)"
-SHARED_LOG="$PROJECT_ROOT/logs/expLRB_${LOG_BASE}.out"
-mkdir -p "$(dirname "$SHARED_LOG")"
-
+# NOTE: on HTCondor the chunk is written into the job sandbox (compute-node $HOME is
+# read-only) and returned via transfer_output_files (see jobs/htcondor.sub.in).
 echo "[job] base=$(basename "$BASE_MACRO") seed=${SEED} events=${EVENTS} threads=${THREADS} out=${OUT}"
-"$BIN" -m "$BASE_MACRO" -t "$THREADS" -s "$SEED" -o "$OUT" --events "$EVENTS" 2>&1 | tee "$SHARED_LOG"
+"$BIN" -m "$BASE_MACRO" -t "$THREADS" -s "$SEED" -o "$OUT" --events "$EVENTS"

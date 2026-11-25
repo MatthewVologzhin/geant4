@@ -119,6 +119,45 @@ progress_of() {
     END { print s + 0 }' "$f" 2>/dev/null
 }
 
+# Same as progress_of but reads the Geant4 output from stdin (used for `condor_tail`).
+progress_of_text() {
+  local primary
+  primary="$(awk '
+    {
+      tid = "0";
+      if (match($0, /G4WT[0-9]+/)) tid = substr($0, RSTART + 4, RLENGTH - 4);
+      if (match($0, /--> Event [0-9]+/)) {
+        n = substr($0, RSTART + 10, RLENGTH - 10) + 0;
+        if (n > m[tid]) m[tid] = n;
+      }
+    }
+    END { s = 0; for (t in m) s += m[t]; print s + 0 }')"
+  if [[ -n "$primary" && "$primary" =~ ^[0-9]+$ && "$primary" -gt 0 ]]; then
+    printf '%s' "$primary"; return
+  fi
+  awk '
+    /\[thread [0-9]+\]/ && match($0, /Number of events processed : [0-9]+/) {
+      s += substr($0, RSTART + 29, RLENGTH - 29) + 0;
+    }
+    END { print s + 0 }'
+}
+
+# Live partial events across a scenario's running HTCondor jobs, read remotely with
+# condor_tail (needed when compute-node $HOME is read-only and stdout is returned only
+# at job completion).
+live_ev_condor() {
+  local sc="$1" id txt d total=0
+  for id in ${SCHED_JOBS[$sc]:-}; do
+    txt="$(condor_tail -maxbytes 200000 "$id" 2>/dev/null)"
+    [[ -n "$txt" ]] || continue
+    d="$(printf '%s' "$txt" | progress_of_text)"
+    [[ "$d" =~ ^[0-9]+$ ]] || d=0
+    (( d > EVENTS_PER_JOB )) && d=$EVENTS_PER_JOB
+    total=$(( total + d ))
+  done
+  printf '%s' "$total"
+}
+
 fmt_dur() {  # seconds -> "2h 05m" / "3d 04h" / "<1m"
   local s="$1"
   if ! [[ "$s" =~ ^[0-9]+$ ]]; then printf 'n/a'; return; fi
@@ -160,10 +199,10 @@ sample_task() {
 # scheduler per-scenario running/pending counts (best effort).
 # SCHED_OK=1 means a real scheduler query ran, so its counts are authoritative for
 # run/pending (a finished job must not be reported as running from a fresh log).
-declare -A SCHED_RUN SCHED_PEND
+declare -A SCHED_RUN SCHED_PEND SCHED_JOBS
 SCHED_OK=0
 sched_snapshot() {
-  SCHED_RUN=(); SCHED_PEND=(); SCHED_OK=0
+  SCHED_RUN=(); SCHED_PEND=(); SCHED_JOBS=(); SCHED_OK=0
   if [[ "$SCHEDULER" == "slurm" ]] && command -v squeue >/dev/null 2>&1; then
     SCHED_OK=1
     local j t
@@ -177,12 +216,15 @@ sched_snapshot() {
     done < <(squeue -u "$USER" -h -o "%j %t" 2>/dev/null)
   elif [[ "$SCHEDULER" == "condor" ]] && command -v condor_q >/dev/null 2>&1; then
     SCHED_OK=1
-    local b s
-    while read -r b s; do
-      [[ -z "$b" ]] && continue
+    local cid proc b s
+    while read -r cid proc b s; do
+      [[ -z "$cid" ]] && continue
       local sc="${b#expLRB_}"
-      case "$s" in 2) (( SCHED_RUN["$sc"]++ )) ;; 1) (( SCHED_PEND["$sc"]++ )) ;; esac
-    done < <(condor_q -nobatch -af JobBatchName JobStatus 2>/dev/null)
+      case "$s" in
+        2) (( SCHED_RUN["$sc"]++ )); SCHED_JOBS["$sc"]+=" ${cid}.${proc}" ;;
+        1) (( SCHED_PEND["$sc"]++ )) ;;
+      esac
+    done < <(condor_q -nobatch -af ClusterId ProcId JobBatchName JobStatus 2>/dev/null)
   fi
 }
 
@@ -242,6 +284,22 @@ snapshot() {
     local extra=$(( nchunks - nlogs )); (( extra < 0 )) && extra=0
     sc_ev=$(( sc_ev + extra * EVENTS_PER_JOB ))
     (( sc_ev < nchunks * EVENTS_PER_JOB )) && sc_ev=$(( nchunks * EVENTS_PER_JOB ))
+
+    # HTCondor live progress via condor_tail (compute-node $HOME is often read-only, so
+    # the job stdout is not on disk until the job ends). Rate is sampled per scenario.
+    if (( SCHED_OK )) && [[ "$SCHEDULER" == "condor" ]] && command -v condor_tail >/dev/null 2>&1; then
+      local live; live="$(live_ev_condor "$scenario")"
+      [[ "$live" =~ ^[0-9]+$ ]] || live=0
+      local live_total=$(( nchunks * EVENTS_PER_JOB + live ))
+      (( live_total > sc_ev )) && sc_ev=$live_total
+      local lk="$STATE_DIR/${scenario}.live" pt=0 pv=0
+      [[ -f "$lk" ]] && read -r pt pv < "$lk" || true
+      [[ "$pt" =~ ^[0-9]+$ ]] || pt=0; [[ "$pv" =~ ^[0-9]+$ ]] || pv=0
+      if (( now > pt && live_total > pv )); then
+        sc_rate="$(awk -v dd=$(( live_total - pv )) -v dt=$(( now - pt )) 'BEGIN { printf "%.4f", (dt>0)?dd/dt:0 }')"
+      fi
+      mkdir -p "$STATE_DIR"; printf '%s %s\n' "$now" "$live_total" > "$lk" 2>/dev/null || true
+    fi
 
     local sc_done=$nchunks sc_run_final sc_pend
     local srun="${SCHED_RUN[$scenario]:-0}"

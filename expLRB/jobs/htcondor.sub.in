@@ -6,9 +6,10 @@
 # values, which makes the default "shared filesystem" requirement
 # (TARGET.FileSystemDomain == MY.FileSystemDomain) unsatisfiable. With
 # should_transfer_files = YES the executable is left in place (transfer_executable = False)
-# and the repository is expected to be visible on the node (getenv forwards the Geant4
-# environment). The chunk is written directly to the shared OUTPUT dir (absolute path in
-# @@OUTDIR@@), so no output-transfer is needed; stdout/stderr are returned as usual.
+# and the repository is read from the node (getenv forwards the Geant4 environment).
+# Compute nodes mount $HOME read-only, so outputs are written into the job sandbox and
+# the chunk is transferred back home explicitly (transfer_output_files); stdout/stderr
+# are returned at job completion.
 universe                = vanilla
 executable              = @@EXEC@@
 arguments               = "@@BASE_MACRO@@ $(Cluster)$(Process) @@EVENTS@@ @@OUTDIR@@/@@TAG@@_$(Process).root @@THREADS@@"
@@ -20,6 +21,7 @@ getenv                  = True
 should_transfer_files   = YES
 transfer_executable     = False
 when_to_transfer_output = ON_EXIT
+transfer_output_files   = @@OUTDIR@@/@@TAG@@_$(Process).root
 request_cpus            = @@THREADS@@
 request_memory          = @@MEMORY@@
 request_disk            = @@DISK@@

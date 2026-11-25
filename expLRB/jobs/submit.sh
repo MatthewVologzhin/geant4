@@ -32,7 +32,6 @@ EVENTS_PER_JOB="${EVENTS_PER_JOB:-50000}"
 SCHEDULER="${SCHEDULER:-auto}"
 MANIFEST="${MANIFEST:-$ROOT/config/macros/manifest.tsv}"
 RAW_DIR="${RAW_DIR:-output/raw}"
-RAW_ABS="$RAW_DIR"; [[ "$RAW_ABS" = /* ]] || RAW_ABS="$ROOT/$RAW_DIR"   # chunks land on the shared FS directly
 MERGED_DIR="${MERGED_DIR:-output/root}"
 
 usage() {
@@ -106,7 +105,7 @@ for row in "${rows[@]}"; do
     if [[ "$SCHEDULER" == "condor" ]]; then
       echo "[dry-run] HTCondor queue $NJOBS -> $scenario  (macro=$macro threads=$threads events/job=$EVENTS_PER_JOB memory=${memory}M disk=${disk}M)"
     else
-      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --mem=${memory}M --job-name=expLRB_$scenario --output=logs/expLRB_${scenario}_%A_%a.out --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_ABS $SELF_DIR/slurm_array.sh"
+      echo "[dry-run] sbatch --array=1-$NJOBS --cpus-per-task=$threads --mem=${memory}M --job-name=expLRB_$scenario --output=logs/expLRB_${scenario}_%A_%a.out --export=ALL,BASE_MACRO=$macro,EVENTS_PER_JOB=$EVENTS_PER_JOB,THREADS=$threads,RUN_TAG=$scenario,RAW_DIR=$RAW_DIR $SELF_DIR/slurm_array.sh"
     fi
     continue
   fi
@@ -119,7 +118,7 @@ for row in "${rows[@]}"; do
       --job-name="expLRB_$scenario" \
       --output="logs/expLRB_${scenario}_%A_%a.out" \
       --error="logs/expLRB_${scenario}_%A_%a.err" \
-      --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_ABS" \
+      --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR" \
       "$SELF_DIR/slurm_array.sh"
   else
     sub="$ROOT/output/submit/${scenario}.sub"
@@ -129,7 +128,7 @@ for row in "${rows[@]}"; do
         -e "s#@@TAG@@#${scenario}#g" \
         -e "s#@@EVENTS@@#${EVENTS_PER_JOB}#g" \
         -e "s#@@THREADS@@#${threads}#g" \
-        -e "s#@@OUTDIR@@#${RAW_ABS}#g" \
+        -e "s#@@OUTDIR@@#${RAW_DIR}#g" \
         -e "s#@@MEMORY@@#${memory}#g" \
         -e "s#@@DISK@@#${disk}#g" \
         -e "s#@@NJOBS@@#${NJOBS}#g" \
