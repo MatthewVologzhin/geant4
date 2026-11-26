@@ -200,7 +200,25 @@ scripts/merge_all.sh monolayer_nofilt_cells_had output/root output/raw
 ```
 
 Планировщик выбирается `jobs/probe_schedulers.sh`; список сценариев — из
-`config/macros/manifest.tsv`. Число событий на задачу задаётся `--events` (перекрывает макрос).
+`config/macros/manifest.tsv`. Число событий на задачу задаётся `--events` (перекрывает макрос);
+**общее число событий на сценарий** берётся из `manifest.tsv` (`events`, из `runs.conf`), а
+`EVENTS_TOTAL` — это переопределение сразу для всех сценариев.
+
+### Два планировщика: HTCondor и SLURM
+
+Оба кластера используют **общий lustre-`/home`** — репозиторий, `build/expLRB` и установки Geant4
+видны на узлах любого из них. HTCondor-хост даёт ~500 свободных ядер; SLURM (отдельный логин-хост,
+ОС Ubuntu) — ~1200 свободных CPU (partitions `all`, `student`, `vclass`). Бинарь, собранный на
+AlmaLinux-хосте HTCondor, запускается и на Ubuntu-узлах SLURM (проверено).
+
+Чтобы задействовать SLURM: зайдите на его логин-хост (адрес/порт — у администратора кластера; в
+репозиторий не писать) и из того же общего репозитория запустите `SCHEDULER=slurm jobs/submit.sh …`
+(`submit.sh` должен исполняться там, где есть `sbatch`/`sinfo`). Удобно разделять нагрузку: быстрые
+`monolayer` — на HTCondor, тяжёлые `suspension` — на SLURM.
+
+Грабли: SLURM копирует `jobs/slurm_array.sh` в свой spool, поэтому `job_run_one.sh` нельзя искать
+относительно `BASH_SOURCE` — путь передаётся абсолютным через переменную `JOB_RUNNER` (её экспортирует
+`submit.sh`); иначе `No such file or directory`.
 
 ### Память и диск на задачу
 
