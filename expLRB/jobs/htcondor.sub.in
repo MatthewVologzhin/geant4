@@ -26,6 +26,10 @@ transfer_output_remaps  = "@@TAG@@_@@LABEL@@_$(Process).root = @@ROOT@@/@@OUTDIR
 request_cpus            = @@THREADS@@
 request_memory          = @@MEMORY@@
 request_disk            = @@DISK@@
+# Nodes wrk1/wrk12 do not mount /home, so jobs landing there fail with
+# "Failed to execute ... job_run_one.sh (errno=2)". Exclude them until the mount
+# is fixed on those nodes.
+requirements            = (Machine =!= "wrk1.phys.cluster") && (Machine =!= "wrk12.phys.cluster")
 +JobBatchName           = "expLRB_@@TAG@@"
 +ExpLRBEvents           = @@EVENTS@@
 queue @@NJOBS@@
