@@ -134,7 +134,7 @@ struct AnalysisConfig {
     };
 
     PlotConfig plotEdepBySpeciesLinear {
-        true, true, false, false, 0.0, 5.0, 0.0, 0.0, 0, 2.5, 1,
+        false, true, false, false, 0.0, 5.0, 0.0, 0.0, 0, 2.5, 1,
         "Energy Deposition by Particle Family (linear, direct-flight peak)",
         "Energy deposited in target, E_{dep} [MeV]",
         "Events per primary (dN/dE)",
@@ -182,7 +182,7 @@ struct AnalysisConfig {
     };
 
     PlotConfig plotSpectraGrid {
-        true, true, true, true, 1e-3, 2e3, 1e-8, 1.0, 0.0, 2.5, 1,
+        false, true, true, true, 1e-3, 2e3, 1e-8, 1.0, 0.0, 2.5, 1,
         "All Entrance Energy Spectra Overview",
         "E_{kin} [MeV] (or E_{kin}/A [MeV/u] on panel 9)",
         "dN / d(ln E) per primary",
@@ -298,6 +298,8 @@ struct ScenarioData {
     std::array<std::vector<double>, kSubCount> evSubEdep;
     std::map<int, std::vector<double>> evFragZDirect;
     std::map<int, std::vector<double>> evFragZDelta;
+    std::vector<double> evPrimaryTotal;                // per-event primary (direct+delta)
+    std::map<int, std::vector<double>> evFragZTotal;   // Z -> per-event total
 
     // Hadronic-interaction birth position along the beam axis (H1, mm).
     TH1D* hHadronVertexZ{nullptr};
@@ -661,6 +663,8 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
             out.subIonCount[c] += subIons[c];
             if (subEdep[c] > 0.0) out.evSubEdep[c].push_back(subEdep[c]);
         }
+        // Primary total = ion's own deposit + its delta-rays (both are EM origin).
+        if (subEdep[0] + subEdep[1] > 0.0) out.evPrimaryTotal.push_back(subEdep[0] + subEdep[1]);
 
         if (out.hasFragments && bFragZ && bFragA && bFragE && bFragEd) {
             size_t k = bFragZ->size();
@@ -680,6 +684,8 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
                 if (bFragI && j < bFragI->size()) out.fragIons[key] += (*bFragI)[j];
             }
             for (const auto& kv : perZ) {
+                const double tot = kv.second.first + kv.second.second;
+                if (tot > 0.0) out.evFragZTotal[kv.first].push_back(tot);
                 if (kv.second.first  > 0.0) out.evFragZDirect[kv.first].push_back(kv.second.first);
                 if (kv.second.second > 0.0) out.evFragZDelta[kv.first].push_back(kv.second.second);
             }
@@ -703,7 +709,6 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
         {"SpecIn_Deuteron", "Deuterons (d)",         2.0, kGreen + 2,   1},
         {"SpecIn_Triton",   "Tritons (t)",           3.0, kMagenta + 1, 1},
         {"SpecIn_He3",      "Helium-3 (^{3}He)",     3.0, kOrange + 7,  1},
-        {"SpecIn_Heavy",    "Heavy (Z #geq 3)",      1.0, kCyan + 2,    1},
         {"SpecIn_Neutron",  "Neutrons (n)",          1.0, kGray + 2,    2}
     };
 
@@ -1306,21 +1311,23 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
         }
     };
 
-    struct Comp { std::string label; Int_t col; const std::vector<double>* dir; const std::vector<double>* del; };
+    // Per component: TOTAL deposit (solid) and its SECONDARY/delta-ray part
+    // (dashed); the primary-particle part is the difference of the two.
+    struct Comp { std::string label; Int_t col; const std::vector<double>* total; const std::vector<double>* delta; };
     std::vector<Comp> comps;
-    comps.push_back({"^{20}Ne (primary)", kBlack, &d.evSubEdep[0], &d.evSubEdep[1]});
+    comps.push_back({"^{20}Ne (primary)", kBlack, &d.evPrimaryTotal, &d.evSubEdep[1]});
     for (int Z = 1; Z <= 8; ++Z) {
-        const std::vector<double>* cdir = nullptr; const std::vector<double>* cdel = nullptr;
-        auto itd = d.evFragZDirect.find(Z); if (itd != d.evFragZDirect.end()) cdir = &itd->second;
-        auto itl = d.evFragZDelta.find(Z);  if (itl != d.evFragZDelta.end())  cdel = &itl->second;
-        if (!cdir && !cdel) continue;
-        comps.push_back({std::string(symbol(Z)) + " (direct/#delta)", elemColor(Z), cdir, cdel});
+        const std::vector<double>* ctot = nullptr; const std::vector<double>* cdel = nullptr;
+        auto itt = d.evFragZTotal.find(Z); if (itt != d.evFragZTotal.end()) ctot = &itt->second;
+        auto itl = d.evFragZDelta.find(Z); if (itl != d.evFragZDelta.end()) cdel = &itl->second;
+        if (!ctot && !cdel) continue;
+        comps.push_back({std::string(symbol(Z)) + " (total/#delta)", elemColor(Z), ctot, cdel});
     }
     if (comps.size() < 2) return;
 
     double eMin = std::numeric_limits<double>::max(), eMax = 0.0;
     for (const auto& c : comps)
-        for (const std::vector<double>* v : {c.dir, c.del}) if (v) for (double x : *v) { eMin = std::min(eMin, x); eMax = std::max(eMax, x); }
+        for (const std::vector<double>* v : {c.total, c.delta}) if (v) for (double x : *v) { eMin = std::min(eMin, x); eMax = std::max(eMax, x); }
     if (eMax <= eMin) return;
     const double lo = eMin * 0.8, hi = eMax * 1.2;
     const double w  = 1.0 / static_cast<double>(d.nEvents);
@@ -1329,13 +1336,13 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
     std::vector<Curve> curves;
     double xMinD = lo, xMaxD = hi, yMinPos = std::numeric_limits<double>::max(), yMaxD = 0.0;
     for (const auto& c : comps) {
-        if (c.dir && !c.dir->empty()) {
-            auto* h = BuildLogHistFromDoubles(*c.dir, lo, hi, 110, w, Form("hDDd_%s_%zu", d.cfg.tag.c_str(), curves.size()));
+        if (c.total && !c.total->empty()) {
+            auto* h = BuildLogHistFromDoubles(*c.total, lo, hi, 110, w, Form("hDDt_%s_%zu", d.cfg.tag.c_str(), curves.size()));
             UpdateBoundsFromHist(h, true, xMinD, xMaxD, yMinPos, yMaxD);
             curves.push_back({&c, h, false});
         }
-        if (c.del && !c.del->empty()) {
-            auto* h = BuildLogHistFromDoubles(*c.del, lo, hi, 110, w, Form("hDDl_%s_%zu", d.cfg.tag.c_str(), curves.size()));
+        if (c.delta && !c.delta->empty()) {
+            auto* h = BuildLogHistFromDoubles(*c.delta, lo, hi, 110, w, Form("hDDl_%s_%zu", d.cfg.tag.c_str(), curves.size()));
             UpdateBoundsFromHist(h, true, xMinD, xMaxD, yMinPos, yMaxD);
             curves.push_back({&c, h, true});
         }
@@ -1373,7 +1380,7 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
         if (seen.insert(cu.c->label).second) { objs.push_back(g); labs.push_back(cu.c->label); opts.push_back("l"); }
     }
     DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
-    DrawHeaderBanner(p, Form("#bf{%s  [solid = direct, dashed = #delta-rays]}  |  %s",
+    DrawHeaderBanner(p, Form("#bf{%s  [solid = total, dashed = secondary (#delta-rays)]}  |  %s",
                              pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
     std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_BySpecies_DirectDelta_" + d.cfg.tag) << "\n";
@@ -2218,6 +2225,9 @@ void analyzeLRB() {
 
     std::vector<ScenarioData> loaded;
     for (const auto& sc : ac.scenarios) {
+        // Validation micro-runs (test_*) are not part of the production figure
+        // set; skip them so they do not add noise to the plots.
+        if (sc.tag.rfind("test_", 0) == 0) { std::cout << "\n>>> Skipping validation run: " << sc.tag << "\n"; continue; }
         std::cout << "\n>>> Loading: " << sc.rootFile << " ...\n";
         ScenarioData data;
         if (LoadScenarioData(sc, data)) {
