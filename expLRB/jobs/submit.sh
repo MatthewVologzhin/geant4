@@ -130,7 +130,7 @@ for row in "${rows[@]}"; do
       --job-name="expLRB_$scenario" \
       --output="logs/expLRB_${scenario}_%A_%a.out" \
       --error="logs/expLRB_${scenario}_%A_%a.err" \
-      --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR",RUN_LABEL="$RUN_LABEL" \
+      --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR",RUN_LABEL="$RUN_LABEL",JOB_RUNNER="$SELF_DIR/job_run_one.sh" \
       "$SELF_DIR/slurm_array.sh"
   else
     sub="$ROOT/output/submit/${scenario}.sub"

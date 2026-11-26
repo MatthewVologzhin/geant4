@@ -15,6 +15,8 @@
 #   EVENTS_PER_JOB  events per array element
 #   THREADS         threads per job
 #   RAW_DIR         directory for raw chunk ROOT files (default output/raw)
+#   JOB_RUNNER      absolute path to jobs/job_run_one.sh (SLURM spools this
+#                   script, so it cannot be located relative to BASH_SOURCE)
 set -euo pipefail
 
 : "${BASE_MACRO:?BASE_MACRO env is required (submit via jobs/submit.sh)}"
@@ -31,5 +33,5 @@ OUT="${RAW_DIR}/${RUN_TAG}_${RUN_LABEL}_$(printf '%04d' "$IDX").root"
 
 mkdir -p "$RAW_DIR" logs
 
-exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/job_run_one.sh" \
+exec "${JOB_RUNNER:?JOB_RUNNER env is required (submit via jobs/submit.sh)}" \
      "$BASE_MACRO" "$SEED" "$EVENTS_PER_JOB" "$OUT" "$THREADS"
