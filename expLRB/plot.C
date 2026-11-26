@@ -10,6 +10,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -189,7 +190,7 @@ struct AnalysisConfig {
     };
 
     PlotConfig plotHeavyPerNucl {
-        true, true, true, true, 1e-3, 200.0, 1e-8, 1.0, 0.0, 2.5, 1,
+        false, true, true, true, 1e-3, 200.0, 1e-8, 1.0, 0.0, 2.5, 1,
         "Heavy Fragment Spectra (Z #geq 3)",
         "Kinetic energy per nucleon, E_{kin}/A [MeV/u]",
         "dN / d(ln(E/A)) per primary",
@@ -290,6 +291,13 @@ struct ScenarioData {
     bool hasFragments{false};
     std::map<long, std::pair<double, double>> fragEdep;
     std::map<long, long> fragIons;
+
+    // Per-event deposits for the direct/delta species split (sparse: only >0
+    // values are stored). evSubEdep: 0=primary direct, 1=primary delta-rays,
+    // 2=fragment direct, 3=fragment delta-rays. evFragZ*: per fragment element Z.
+    std::array<std::vector<double>, kSubCount> evSubEdep;
+    std::map<int, std::vector<double>> evFragZDirect;
+    std::map<int, std::vector<double>> evFragZDelta;
 
     // Hadronic-interaction birth position along the beam axis (H1, mm).
     TH1D* hHadronVertexZ{nullptr};
@@ -651,6 +659,7 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
         for (size_t c = 0; c < ScenarioData::kSubCount; ++c) {
             out.subEdepMeV[c] += subEdep[c];
             out.subIonCount[c] += subIons[c];
+            if (subEdep[c] > 0.0) out.evSubEdep[c].push_back(subEdep[c]);
         }
 
         if (out.hasFragments && bFragZ && bFragA && bFragE && bFragEd) {
@@ -658,13 +667,21 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
             k = std::min(k, bFragA->size());
             k = std::min(k, bFragE->size());
             k = std::min(k, bFragEd->size());
+            std::map<int, std::pair<double, double>> perZ;  // Z -> {direct, delta}
             for (size_t j = 0; j < k; ++j) {
-                const long key = static_cast<long>((*bFragZ)[j]) * 1000L + (*bFragA)[j];
+                const int  Z  = (*bFragZ)[j];
+                const long key = static_cast<long>(Z) * 1000L + (*bFragA)[j];
                 auto& slot = out.fragEdep[key];
                 const double ed = (*bFragEd)[j];
                 slot.second += ed;                       // delta
                 slot.first  += (*bFragE)[j] - ed;        // direct
+                perZ[Z].first  += (*bFragE)[j] - ed;
+                perZ[Z].second += ed;
                 if (bFragI && j < bFragI->size()) out.fragIons[key] += (*bFragI)[j];
+            }
+            for (const auto& kv : perZ) {
+                if (kv.second.first  > 0.0) out.evFragZDirect[kv.first].push_back(kv.second.first);
+                if (kv.second.second > 0.0) out.evFragZDelta[kv.first].push_back(kv.second.second);
             }
         }
 
@@ -1007,13 +1024,25 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     auto toDose = [&](double edepMeV) { return d.hasMass ? EdepMeVToGy(edepMeV, d.targetMassKg) * scale
                                                          : edepMeV * scale; };
 
-    auto* hDir = new TH1D(Form("hFragDir_%s", d.cfg.tag.c_str()), "", n, 0, n);
-    auto* hDel = new TH1D(Form("hFragDel_%s", d.cfg.tag.c_str()), "", n, 0, n);
+    auto elemColor = [](int z) -> Int_t {
+        switch (z) {
+            case 1: return kBlue + 1;    case 2: return kRed + 1;
+            case 3: return kGreen + 2;   case 4: return kOrange + 7;
+            case 5: return kMagenta + 1; case 6: return kCyan + 2;
+            case 7: return kViolet + 1;  case 8: return kTeal + 2;
+            default: return kGray + 2;
+        }
+    };
+
+    // Frame for axes/bins; the bars are drawn per element so each element has a
+    // distinct colour (previously all elements shared the same two colours).
+    auto* hF = new TH1D(Form("hFragF_%s", d.cfg.tag.c_str()), "", n, 0, n);
+    double maxVal = 0.0;
     for (int i = 0; i < n; ++i) {
-        hDir->SetBinContent(i + 1, toDose(vec[i].second.first));
-        hDel->SetBinContent(i + 1, toDose(vec[i].second.second));
-        hDir->GetXaxis()->SetBinLabel(i + 1, Form("%s (Z=%d)", symbol(vec[i].first), vec[i].first));
+        maxVal = std::max(maxVal, toDose(vec[i].second.first + vec[i].second.second));
+        hF->GetXaxis()->SetBinLabel(i + 1, Form("%s (Z=%d)", symbol(vec[i].first), vec[i].first));
     }
+    if (maxVal <= 0.0) { delete hF; return; }
 
     auto* c = new TCanvas(Form("c_frag_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(),
                           ac.canvasWidth, ac.canvasHeight);
@@ -1023,33 +1052,47 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
 
-    // True stacked bars: draw the cumulative (direct+delta) first, then the
-    // direct part on top, so BOTH segments stay visible (a plain BAR1 SAME
-    // overlay would hide the delta contribution behind the direct one).
-    auto* hStack = static_cast<TH1D*>(hDir->Clone(Form("hFragStack_%s", d.cfg.tag.c_str())));
-    hStack->Add(hDel);  // total = direct + delta
-    hStack->SetFillColor(kRed + 1);   hStack->SetFillStyle(1001); hStack->SetLineColor(kRed + 1);
-    hDir->SetFillColor(kAzure + 1);   hDir->SetFillStyle(1001);   hDir->SetLineColor(kAzure + 1);
-    hStack->GetXaxis()->LabelsOption("u"); hStack->GetXaxis()->SetLabelSize(0.030);
-    hStack->GetYaxis()->SetTitle(d.hasMass ? pc.yTitle.c_str()
-                                           : Form("Energy deposited [MeV per %s]", ac.normLabel.c_str()));
-    hStack->GetYaxis()->SetTitleSize(0.042); hStack->GetYaxis()->SetTitleOffset(1.12);
-    hStack->SetBarWidth(1.0); hStack->SetBarOffset(0.0);
-    hDir->SetBarWidth(1.0);   hDir->SetBarOffset(0.0);
-    hStack->Draw("BAR1");
-    hDir->Draw("BAR1 SAME");
+    hF->GetXaxis()->LabelsOption("u"); hF->GetXaxis()->SetLabelSize(0.030);
+    hF->GetYaxis()->SetTitle(d.hasMass ? pc.yTitle.c_str()
+                                       : Form("Energy deposited [MeV per %s]", ac.normLabel.c_str()));
+    hF->GetYaxis()->SetTitleSize(0.042); hF->GetYaxis()->SetTitleOffset(1.12);
+    hF->SetMinimum(pc.logY ? pc.yMin : 0.0);
+    hF->SetMaximum(pc.logY ? maxVal * 40.0 : maxVal * 1.2);
+    hF->SetStats(0);
+    hF->Draw("AXIS");
 
-    auto* leg = new TLegend(0.52, 0.78, 0.90, 0.89);
-    leg->SetBorderSize(0); leg->SetTextSize(0.030);
-    leg->AddEntry(hDir, "fragment direct", "f");
-    leg->AddEntry(hStack, "fragment delta-rays", "f");
+    auto* leg = new TLegend(0.44, 0.74, 0.90, 0.89);
+    leg->SetBorderSize(0); leg->SetTextSize(0.027);
+    for (int i = 0; i < n; ++i) {
+        const int Z = vec[i].first;
+        const double dv = toDose(vec[i].second.first);
+        const double lv = toDose(vec[i].second.second);
+        const Int_t col = elemColor(Z);
+        // delta-rays: draw cumulative (direct+delta) with a hatch pattern ...
+        if (lv > 0.0) {
+            auto* hb = new TH1D(Form("hFragD_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
+            hb->SetBinContent(1, dv + lv);
+            hb->SetFillColor(col); hb->SetFillStyle(3004); hb->SetLineColor(col);
+            hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR1 SAME");
+        }
+        // ... then the direct part solid on top, so both segments stay visible.
+        if (dv > 0.0) {
+            auto* hb = new TH1D(Form("hFragB_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
+            hb->SetBinContent(1, dv);
+            hb->SetFillColor(col); hb->SetFillStyle(1001); hb->SetLineColor(col);
+            hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR1 SAME");
+        }
+        auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
+        hleg->SetFillColor(col); hleg->SetFillStyle(1001);
+        leg->AddEntry(hleg, Form("%s (Z=%d)", symbol(Z), Z), "f");
+    }
     leg->Draw();
-    DrawHeaderBanner(p, Form("#bf{%s}  |  %s", pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()),
-                     ac.leftMargin, 0.942, pc.textSize);
+    DrawHeaderBanner(p, Form("#bf{%s  [solid = direct, hatched = #delta-rays]}  |  %s",
+                             pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
     std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_ByFragment_" + d.cfg.tag) << "\n";
     delete c;
-    outDir->cd(); hDir->Write(); hStack->Write(); delete hDir; delete hStack; delete hDel;
+    outDir->cd(); hF->Write(); delete hF;
 }
 
 // Hadronic interaction vertices along the beam axis z: where in the tract (which
@@ -1239,6 +1282,103 @@ static void PlotSingleEdepBySpecies(const ScenarioData& d, const AnalysisConfig&
     outDir->cd();
     for (auto& pair : hists) { pair.second->Write(); delete pair.second; }
     delete hF;
+}
+
+// Direct vs delta-ray split of the per-event energy-deposit spectrum, resolved
+// by species/element: solid = the particle's own deposit, dashed = its delta-rays.
+// This shows which component produces each peak (ionisation vs radiative/EM tail)
+// and replaces the coarse "Heavy (Z>=3)" lump with per-element curves.
+static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
+    if (!ac.plotEdepBySpecies.enabled || d.nEvents <= 0) return;
+    const auto& pc = ac.plotEdepBySpecies;
+
+    auto symbol = [](int z) -> const char* {
+        static const char* s[] = {"n","H","He","Li","Be","B","C","N","O","F","Ne"};
+        return (z >= 0 && z <= 10) ? s[z] : "?";
+    };
+    auto elemColor = [](int z) -> Int_t {
+        switch (z) {
+            case 1: return kBlue + 1;   case 2: return kRed + 1;
+            case 3: return kGreen + 2;  case 4: return kOrange + 7;
+            case 5: return kMagenta + 1;case 6: return kCyan + 2;
+            case 7: return kViolet + 1; case 8: return kTeal + 2;
+            default: return kGray + 2;
+        }
+    };
+
+    struct Comp { std::string label; Int_t col; const std::vector<double>* dir; const std::vector<double>* del; };
+    std::vector<Comp> comps;
+    comps.push_back({"^{20}Ne (primary)", kBlack, &d.evSubEdep[0], &d.evSubEdep[1]});
+    for (int Z = 1; Z <= 8; ++Z) {
+        const std::vector<double>* cdir = nullptr; const std::vector<double>* cdel = nullptr;
+        auto itd = d.evFragZDirect.find(Z); if (itd != d.evFragZDirect.end()) cdir = &itd->second;
+        auto itl = d.evFragZDelta.find(Z);  if (itl != d.evFragZDelta.end())  cdel = &itl->second;
+        if (!cdir && !cdel) continue;
+        comps.push_back({std::string(symbol(Z)) + " (direct/#delta)", elemColor(Z), cdir, cdel});
+    }
+    if (comps.size() < 2) return;
+
+    double eMin = std::numeric_limits<double>::max(), eMax = 0.0;
+    for (const auto& c : comps)
+        for (const std::vector<double>* v : {c.dir, c.del}) if (v) for (double x : *v) { eMin = std::min(eMin, x); eMax = std::max(eMax, x); }
+    if (eMax <= eMin) return;
+    const double lo = eMin * 0.8, hi = eMax * 1.2;
+    const double w  = 1.0 / static_cast<double>(d.nEvents);
+
+    struct Curve { const Comp* c; TH1D* h; bool delta; };
+    std::vector<Curve> curves;
+    double xMinD = lo, xMaxD = hi, yMinPos = std::numeric_limits<double>::max(), yMaxD = 0.0;
+    for (const auto& c : comps) {
+        if (c.dir && !c.dir->empty()) {
+            auto* h = BuildLogHistFromDoubles(*c.dir, lo, hi, 110, w, Form("hDDd_%s_%zu", d.cfg.tag.c_str(), curves.size()));
+            UpdateBoundsFromHist(h, true, xMinD, xMaxD, yMinPos, yMaxD);
+            curves.push_back({&c, h, false});
+        }
+        if (c.del && !c.del->empty()) {
+            auto* h = BuildLogHistFromDoubles(*c.del, lo, hi, 110, w, Form("hDDl_%s_%zu", d.cfg.tag.c_str(), curves.size()));
+            UpdateBoundsFromHist(h, true, xMinD, xMaxD, yMinPos, yMaxD);
+            curves.push_back({&c, h, true});
+        }
+    }
+    if (curves.empty() || yMaxD <= 0.0) { for (auto& cu : curves) delete cu.h; return; }
+
+    const double yMin = std::pow(10.0, std::floor(std::log10(yMinPos)) - 0.3);
+    const double yMax = std::pow(10.0, std::ceil(std::log10(yMaxD)) + 0.6);
+
+    auto* c = new TCanvas(Form("c_edep_dd_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(), ac.canvasWidth, ac.canvasHeight);
+    auto* p = new TPad("p", "", 0, 0, 1, 1);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(ac.bottomMargin);
+    p->SetLogx(pc.logX); p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
+    p->Draw(); p->cd();
+
+    auto* hF = new TH1D(Form("hF_edep_dd_%s", d.cfg.tag.c_str()), "", 100, xMinD, xMaxD);
+    hF->Draw("AXIS");
+    hF->GetXaxis()->SetTitle(pc.xTitle.c_str());
+    hF->GetXaxis()->SetTitleSize(0.042); hF->GetXaxis()->SetTitleOffset(1.18);
+    hF->GetXaxis()->SetLabelSize(0.036); hF->GetXaxis()->CenterTitle(true);
+    hF->GetYaxis()->SetRangeUser(yMin, yMax);
+    hF->GetYaxis()->SetTitle(pc.yTitle.c_str());
+    hF->GetYaxis()->SetTitleSize(0.042); hF->GetYaxis()->SetTitleOffset(1.08);
+    hF->GetYaxis()->SetLabelSize(0.036); hF->GetYaxis()->CenterTitle(true);
+
+    std::vector<TObject*> objs; std::vector<std::string> labs, opts;
+    std::set<std::string> seen;
+    for (const auto& cu : curves) {
+        auto* g = HistToCleanGraph(cu.h, yMin * 0.1, true);
+        g->SetLineColor(cu.c->col);
+        g->SetLineStyle(cu.delta ? 2 : 1);
+        g->SetLineWidth(pc.lineWidth);
+        g->Draw("L SAME");
+        if (seen.insert(cu.c->label).second) { objs.push_back(g); labs.push_back(cu.c->label); opts.push_back("l"); }
+    }
+    DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+    DrawHeaderBanner(p, Form("#bf{%s  [solid = direct, dashed = #delta-rays]}  |  %s",
+                             pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
+    p->RedrawAxis(); c->Update();
+    std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_BySpecies_DirectDelta_" + d.cfg.tag) << "\n";
+    delete c;
+    outDir->cd(); for (auto& cu : curves) { cu.h->Write(); delete cu.h; } delete hF;
 }
 
 static void PlotSingleEdepBySpeciesLinear(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
@@ -2021,31 +2161,26 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
     const double yMin = pc.autoRange ? std::pow(10.0, std::floor(std::log10(yMinPos)) - 0.3) : pc.yMin;
     const double yMax = pc.autoRange ? std::pow(10.0, std::ceil(std::log10(yMaxD)) + 0.6)    : pc.yMax;
 
+    // Single-pad overlay (the old ratio pad was only for comparison with
+    // experimental data and is no longer wanted).
     auto* c = new TCanvas(Form("c_cmp_%s", outName.c_str()), outName.c_str(), ac.canvasWidth, ac.canvasHeight);
-    auto* pad1 = new TPad("pad1", "main",  0.0, 0.30, 1.0, 1.0);
-    auto* pad2 = new TPad("pad2", "ratio", 0.0, 0.0,  1.0, 0.30);
-
+    auto* pad1 = new TPad("pad1", "main", 0.0, 0.0, 1.0, 1.0);
     pad1->SetLeftMargin(ac.leftMargin); pad1->SetRightMargin(ac.rightMargin);
-    pad1->SetTopMargin(ac.topMargin);   pad1->SetBottomMargin(0.0);
-    pad2->SetLeftMargin(ac.leftMargin); pad2->SetRightMargin(ac.rightMargin);
-
+    pad1->SetTopMargin(ac.topMargin);   pad1->SetBottomMargin(ac.bottomMargin);
     pad1->SetLogy(pc.logY);
-    if (pc.logX) { pad1->SetLogx(); pad2->SetLogx(); }
+    if (pc.logX) pad1->SetLogx();
     pad1->SetTickx(1); pad1->SetTicky(1);
-    pad1->Draw();
+    pad1->Draw(); pad1->cd();
 
-    pad2->SetTopMargin(0.0); pad2->SetBottomMargin(0.32);
-    pad2->SetTickx(1); pad2->SetTicky(1);
-    pad2->Draw();
-
-    pad1->cd();
     auto* hF1 = new TH1D(Form("hF1_%s", outName.c_str()), "", 100, xMin, xMax);
     hF1->Draw("AXIS");
-    hF1->GetXaxis()->SetLabelSize(0); hF1->GetXaxis()->SetTitleSize(0);
+    hF1->GetXaxis()->SetTitle(pc.xTitle.c_str());
+    hF1->GetXaxis()->SetTitleSize(0.042); hF1->GetXaxis()->SetTitleOffset(1.18);
+    hF1->GetXaxis()->SetLabelSize(0.036); hF1->GetXaxis()->CenterTitle(true);
     hF1->GetYaxis()->SetRangeUser(yMin, yMax);
     hF1->GetYaxis()->SetTitle(pc.yTitle.c_str());
-    hF1->GetYaxis()->SetTitleSize(0.060); hF1->GetYaxis()->SetTitleOffset(0.75);
-    hF1->GetYaxis()->SetLabelSize(0.045); hF1->GetYaxis()->CenterTitle(true);
+    hF1->GetYaxis()->SetTitleSize(0.042); hF1->GetYaxis()->SetTitleOffset(1.08);
+    hF1->GetYaxis()->SetLabelSize(0.036); hF1->GetYaxis()->CenterTitle(true);
 
     std::vector<TObject*> objs; std::vector<std::string> labs, opts;
     for (size_t i = 0; i < hists.size(); ++i) {
@@ -2057,48 +2192,15 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
         objs.push_back(g); labs.push_back(cfgs[i]->legendLabel); opts.push_back("l");
     }
     DrawDualLegend(pad1, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
-    DrawHeaderBanner(pad1, Form("#bf{%s}", pc.titlePrefix.c_str()), ac.leftMargin, 0.942, 0.040);
+    DrawHeaderBanner(pad1, Form("#bf{%s}", pc.titlePrefix.c_str()), ac.leftMargin, 0.942, pc.textSize);
     pad1->RedrawAxis();
-
-    pad2->cd();
-    auto* hF2 = new TH1D(Form("hF2_%s", outName.c_str()), "", 100, xMin, xMax);
-    hF2->Draw("AXIS");
-    hF2->GetXaxis()->SetTitle(pc.xTitle.c_str());
-    hF2->GetXaxis()->SetTitleSize(0.13); hF2->GetXaxis()->SetTitleOffset(1.00);
-    hF2->GetXaxis()->SetLabelSize(0.10); hF2->GetXaxis()->CenterTitle(true);
-    hF2->GetYaxis()->SetRangeUser(pc.ratioMin, pc.ratioMax);
-    hF2->GetYaxis()->SetTitle(pc.ratioTitle.c_str());
-    hF2->GetYaxis()->SetTitleSize(0.10); hF2->GetYaxis()->SetTitleOffset(0.45);
-    hF2->GetYaxis()->SetLabelSize(0.09); hF2->GetYaxis()->CenterTitle(true);
-    hF2->GetYaxis()->SetNdivisions(505);
-
-    auto* unit = new TLine(xMin, 1.0, xMax, 1.0);
-    unit->SetLineStyle(2);
-    unit->Draw("SAME");
-
-    const TH1D* hRef = hists[0];
-    for (size_t i = 1; i < hists.size(); ++i) {
-        auto* gR = new TGraph();
-        for (int b = 1; b <= hists[i]->GetNbinsX(); ++b) {
-            const double vRef = hRef->GetBinContent(b);
-            const double vCur = hists[i]->GetBinContent(b);
-            if (vRef > 0.0 && vCur > 0.0) {
-                gR->SetPoint(gR->GetN(), hists[i]->GetBinCenter(b), vCur / vRef);
-            }
-        }
-        gR->SetLineColor(cfgs[i]->color);
-        gR->SetLineStyle(cfgs[i]->lineStyle);
-        gR->SetLineWidth(pc.lineWidth);
-        gR->Draw("L SAME");
-    }
-    pad2->RedrawAxis();
     c->Update();
     std::cout << "  [Saved] " << SavePlot(c, ac, outName) << "\n";
     delete c;
 
     cmpDir->cd();
     for (auto* h : hists) { h->Write(); delete h; }
-    delete hF1; delete hF2;
+    delete hF1;
 }
 
 // ============================================================================
@@ -2141,6 +2243,7 @@ void analyzeLRB() {
         if (d.hasSubChannels) PlotSingleSubChannels(d, ac, sub);
         PlotSingleEdepEventDist(d, ac, sub);
         PlotSingleEdepBySpecies(d, ac, sub);
+        PlotSingleEdepDirectDelta(d, ac, sub);
         PlotSingleEdepBySpeciesLinear(d, ac, sub);
         PlotSingleFragmentCounts(d, ac, sub);
         PlotSingleICSD(d, ac, sub);
