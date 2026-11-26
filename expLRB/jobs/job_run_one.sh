@@ -38,5 +38,12 @@ export G4FORCENUMBEROFTHREADS="$THREADS"
 
 # NOTE: on HTCondor the chunk is written into the job sandbox (compute-node $HOME is
 # read-only) and returned via transfer_output_files (see jobs/htcondor.sub.in).
+# On SLURM the output dir is the shared $HOME, so we must not expose a
+# partially-written ROOT: write to a sibling *.part and rename only on success,
+# otherwise a ~290-byte in-progress stub is visible to hadd/monitor.
+TMP="${OUT}.part.$$"
+trap 'rm -f "$TMP"' EXIT
 echo "[job] base=$(basename "$BASE_MACRO") seed=${SEED} events=${EVENTS} threads=${THREADS} out=${OUT}"
-"$BIN" -m "$BASE_MACRO" -t "$THREADS" -s "$SEED" -o "$OUT" --events "$EVENTS"
+"$BIN" -m "$BASE_MACRO" -t "$THREADS" -s "$SEED" -o "$TMP" --events "$EVENTS"
+mv -f "$TMP" "$OUT"
+trap - EXIT

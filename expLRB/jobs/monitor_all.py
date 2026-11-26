@@ -89,7 +89,8 @@ def slurm_by_scenario():
 
 def chunks_by_scenario():
     ssh = CONDOR_SSH or SLURM_SSH  # same shared $HOME either way
-    out = sh(ssh, f"ls -1 {REPO}/{RAW_DIR}/*.root 2>/dev/null")
+    # Only count COMPLETE chunks: an in-progress chunk is a ~290-byte stub.
+    out = sh(ssh, f"find {REPO}/{RAW_DIR} -maxdepth 1 -name '*.root' -size +10k -printf '%f\\n' 2>/dev/null")
     agg = defaultdict(int)
     for line in out.splitlines():
         base = os.path.basename(line.strip())

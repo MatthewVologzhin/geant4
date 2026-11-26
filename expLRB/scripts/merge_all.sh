@@ -10,11 +10,20 @@ MERGED_DIR="${2:-output/root}"
 RAW_DIR="${3:-output/raw}"
 
 shopt -s nullglob
-files=("$RAW_DIR/${TAG}"_*.root)
+all=("$RAW_DIR/${TAG}"_*.root)
 shopt -u nullglob
 
+# Skip partially-written / near-empty chunks: while a job is still running its
+# ROOT file is a ~290-byte stub (written directly in the shared output dir by the
+# legacy runner). Only merge complete chunks (>10 KB).
+files=()
+for f in "${all[@]}"; do
+  sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
+  if [[ "$sz" -gt 10000 ]]; then files+=("$f"); else echo "[merge_all] skip in-progress/stub: $f ($sz B)" >&2; fi
+done
+
 if [[ "${#files[@]}" -eq 0 ]]; then
-  echo "[merge_all] no chunk files matching $RAW_DIR/${TAG}_*.root" >&2
+  echo "[merge_all] no complete chunk files matching $RAW_DIR/${TAG}_*.root" >&2
   exit 1
 fi
 
