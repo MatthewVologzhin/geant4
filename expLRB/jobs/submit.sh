@@ -18,6 +18,8 @@
 #   MEMORY           memory per job in MB (overrides manifest per-sample)   (default: manifest)
 #   DISK             disk per job in MB (overrides manifest per-sample)     (default: manifest)
 #   SCHEDULER        auto|slurm|condor            (default auto)
+#   RUN_LABEL        chunk-name tag for this submission; repeat runs then    (default: timestamp)
+#                    ADD chunks instead of overwriting <tag>_<proc>.root
 #   MANIFEST         path to manifest.tsv         (default config/macros/manifest.tsv)
 #   RAW_DIR          raw chunk output dir         (default output/raw)
 #   MERGED_DIR       merged output dir (plot.C reads output/root/<scenario>.root;
@@ -29,6 +31,11 @@ ROOT="$(cd "$SELF_DIR/.." && pwd)"
 
 EVENTS_TOTAL="${EVENTS_TOTAL:-1000000}"
 EVENTS_PER_JOB="${EVENTS_PER_JOB:-50000}"
+# Unique per-submission label embedded in every chunk name. Without it a second
+# submission reuses "<tag>_<proc>.root" and overwrites the previous chunks; with
+# it the new chunks are distinct and merge_all.sh "<tag>_*.root" accumulates them
+# into larger statistics. Override with RUN_LABEL=stat2 etc.
+RUN_LABEL="${RUN_LABEL:-$(date +%Y%m%d_%H%M%S)}"
 SCHEDULER="${SCHEDULER:-auto}"
 MANIFEST="${MANIFEST:-$ROOT/config/macros/manifest.tsv}"
 RAW_DIR="${RAW_DIR:-output/raw}"
@@ -118,7 +125,7 @@ for row in "${rows[@]}"; do
       --job-name="expLRB_$scenario" \
       --output="logs/expLRB_${scenario}_%A_%a.out" \
       --error="logs/expLRB_${scenario}_%A_%a.err" \
-      --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR" \
+      --export=ALL,BASE_MACRO="$mac",EVENTS_PER_JOB="$EVENTS_PER_JOB",THREADS="$threads",RUN_TAG="$scenario",RAW_DIR="$RAW_DIR",RUN_LABEL="$RUN_LABEL" \
       "$SELF_DIR/slurm_array.sh"
   else
     sub="$ROOT/output/submit/${scenario}.sub"
@@ -126,6 +133,7 @@ for row in "${rows[@]}"; do
         -e "s#@@ROOT@@#${ROOT}#g" \
         -e "s#@@BASE_MACRO@@#${mac}#g" \
         -e "s#@@TAG@@#${scenario}#g" \
+        -e "s#@@LABEL@@#${RUN_LABEL}#g" \
         -e "s#@@EVENTS@@#${EVENTS_PER_JOB}#g" \
         -e "s#@@THREADS@@#${threads}#g" \
         -e "s#@@OUTDIR@@#${RAW_DIR}#g" \

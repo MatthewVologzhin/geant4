@@ -12,7 +12,7 @@
 # <repo>/<OUTDIR>/<tag>_<proc>.root (HTCondor otherwise lands it by basename).
 universe                = vanilla
 executable              = @@EXEC@@
-arguments               = "@@BASE_MACRO@@ $(Cluster)$(Process) @@EVENTS@@ @@TAG@@_$(Process).root @@THREADS@@"
+arguments               = "@@BASE_MACRO@@ $(Cluster)$(Process) @@EVENTS@@ @@TAG@@_@@LABEL@@_$(Process).root @@THREADS@@"
 initialdir              = @@ROOT@@
 output                  = logs/expLRB_@@TAG@@_$(Process).out
 error                   = logs/expLRB_@@TAG@@_$(Process).err
@@ -21,8 +21,8 @@ getenv                  = True
 should_transfer_files   = YES
 transfer_executable     = False
 when_to_transfer_output = ON_EXIT
-transfer_output_files   = @@TAG@@_$(Process).root
-transfer_output_remaps  = "@@TAG@@_$(Process).root = @@ROOT@@/@@OUTDIR@@/@@TAG@@_$(Process).root"
+transfer_output_files   = @@TAG@@_@@LABEL@@_$(Process).root
+transfer_output_remaps  = "@@TAG@@_@@LABEL@@_$(Process).root = @@ROOT@@/@@OUTDIR@@/@@TAG@@_@@LABEL@@_$(Process).root"
 request_cpus            = @@THREADS@@
 request_memory          = @@MEMORY@@
 request_disk            = @@DISK@@

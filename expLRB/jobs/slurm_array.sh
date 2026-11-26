@@ -22,11 +22,12 @@ set -euo pipefail
 EVENTS_PER_JOB="${EVENTS_PER_JOB:-50000}"
 THREADS="${THREADS:-${SLURM_CPUS_PER_TASK:-10}}"
 RAW_DIR="${RAW_DIR:-output/raw}"
+RUN_LABEL="${RUN_LABEL:-$(date +%Y%m%d_%H%M%S)}"
 IDX="${SLURM_ARRAY_TASK_ID:?this script must run as a SLURM array}"
 
 # Submission-unique, non-overlapping seed (safe for hadd across independent runs)
 SEED=$(( IDX + 1000000 * ( ${SLURM_JOB_ID:-0} % 1000 ) ))
-OUT="${RAW_DIR}/${RUN_TAG}_$(printf '%04d' "$IDX").root"
+OUT="${RAW_DIR}/${RUN_TAG}_${RUN_LABEL}_$(printf '%04d' "$IDX").root"
 
 mkdir -p "$RAW_DIR" logs
 
