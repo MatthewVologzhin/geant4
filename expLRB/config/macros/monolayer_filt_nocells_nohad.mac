@@ -59,7 +59,7 @@
 /bio/layer/create RPMI_1640 0
 /bio/layer/size 14 14 0.015 mm
 /bio/layer/pos 0 0 2.50445 cm
-/bio/layer/physics DNA_Opt6
+/bio/layer/physics none
 # --- Beam ---
 /run/initialize
 /gun/particle ion
