@@ -99,6 +99,17 @@
 - **Память задачи:** задаётся на сценарий в `config/runs.conf` `[sample:…] memory/disk` (МБ) →
   `request_memory/request_disk`/`--mem`. Без `request_memory` HTCondor выдаёт ~128 МБ и задача
   уходит в `H`.
+- **`wrk1`/`wrk12` не монтируют `/home`** (проверено 2026-11). Задачи, попавшие на эти узлы, падают с
+  `Failed to execute '<repo>/jobs/job_run_one.sh' ... (errno=2: 'No such file or directory')`: узел не
+  видит lustre-home, поэтому «запуск executable по абсолютному пути» (`transfer_executable=False`)
+  не работает. Остальные узлы (`wrk2..wrk11`) здоровы. Обход без повторной отправки — задать исключение
+  на уже поставленных задачах и вернуть их в очередь (завершённые чанки сохраняются):
+  ```bash
+  condor_qedit -constraint 'true' Requirements '((Machine =!= "wrk1.phys.cluster") && (Machine =!= "wrk12.phys.cluster"))'
+  condor_release -all
+  ```
+  (`condor_qedit` требует `-constraint <expr>` или `<cluster>[.<proc>]`; форма `-all` в 24.3.0 не работает.)
+  Лечение на стороне кластера — починить mount на `wrk1`/`wrk12`.
 
 ## 9. РАЗРЕШЕНО: расхождение dE/dx DNA на кластере (2026-11)
 
