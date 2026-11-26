@@ -4,6 +4,16 @@
 #include "G4Allocator.hh"
 #include "BioTrackInformation.hh"
 #include <array>
+#include <map>
+
+// Per-fragment accumulator keyed by the hadron's (Z,A): energy deposited by the
+// fragment itself ("direct") and by its delta-rays ("delta"), plus ionisation
+// counts. Key = Z*1000 + A (A < 1000 for all reachable fragments).
+struct FragmentAccum {
+    G4double edep{0.0};
+    G4double edepDelta{0.0};
+    G4int    ions{0};
+};
 
 class CellHit : public G4VHit {
 public:
@@ -38,6 +48,20 @@ public:
         if (idx < fIonsNonDNASpecies.size()) {
             fIonsNonDNASpecies[idx] += nonDnaIons;
         }
+    }
+
+    // Attribute this step's deposit to a specific hadron fragment (Z,A). Called
+    // only for hadronic-cascade tracks with Z>0. 'isDelta' flags delta-rays (and
+    // their cascade) so direct and delta contributions stay separable.
+    void AddFragment(G4int z, G4int a, G4double edep, G4bool isDelta, G4int ions) noexcept {
+        if (z <= 0) return;
+        auto& fa = fFragments[static_cast<long>(z) * 1000L + a];
+        fa.edep += edep;
+        if (isDelta) fa.edepDelta += edep;
+        fa.ions += ions;
+    }
+    [[nodiscard]] const std::map<long, FragmentAccum>& GetFragments() const noexcept {
+        return fFragments;
     }
 
     [[nodiscard]] G4int GetCellID() const noexcept { return fCellID; }
@@ -80,6 +104,8 @@ private:
 
     std::array<G4double, static_cast<size_t>(SubChannel::kCount)> fEdepSubChannel{};
     std::array<G4int,    static_cast<size_t>(SubChannel::kCount)> fIonsSubChannel{};
+
+    std::map<long, FragmentAccum> fFragments{};
 
     G4int fCellID{-1};
 };

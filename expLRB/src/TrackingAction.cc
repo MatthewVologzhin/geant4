@@ -71,8 +71,10 @@ void TrackingAction::PreUserTrackingAction(const G4Track* track) {
         const SubChannel sub = IsElectron(track->GetDefinition())
                                    ? SubChannel::HadronicDeltaRays
                                    : SubChannel::HadronicFragmentsDirect;
-        const_cast<G4Track*>(track)->SetUserInformation(
-            new BioTrackInformation(OriginChannel::HadronicCascade, sp, sub));
+        auto* info = new BioTrackInformation(OriginChannel::HadronicCascade, sp, sub);
+        info->SetFragmentZA(track->GetDefinition()->GetAtomicNumber(),
+                            track->GetDefinition()->GetAtomicMass());
+        const_cast<G4Track*>(track)->SetUserInformation(info);
     } else {
         const_cast<G4Track*>(track)->SetUserInformation(
             new BioTrackInformation(OriginChannel::PrimaryEM, FragmentSpecies::None,
@@ -124,8 +126,14 @@ void TrackingAction::PostUserTrackingAction(const G4Track* track) {
                 secSub = secIsElectron ? SubChannel::HadronicDeltaRays : parentSub;
             }
 
-            sec->SetUserInformation(
-                new BioTrackInformation(OriginChannel::HadronicCascade, secSpecies, secSub));
+            auto* info = new BioTrackInformation(OriginChannel::HadronicCascade, secSpecies, secSub);
+            if (createdByHadronic) {  // a new fragment: identity from its own definition
+                info->SetFragmentZA(sec->GetDefinition()->GetAtomicNumber(),
+                                    sec->GetDefinition()->GetAtomicMass());
+            } else {  // delta-ray / descendant: inherit the parent fragment's (Z,A)
+                info->SetFragmentZA(parentInfo->GetFragmentZ(), parentInfo->GetFragmentA());
+            }
+            sec->SetUserInformation(info);
         } else {
             // Чистая электромагнитная линия первичного пучка: дельта-электроны и их каскад
             const SubChannel secSub = secIsElectron ? SubChannel::PrimaryDeltaRays : parentSub;

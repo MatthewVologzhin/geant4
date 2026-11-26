@@ -12,6 +12,7 @@
 #include "G4HCofThisEvent.hh"
 #include "G4AnalysisManager.hh"
 #include <array>
+#include <map>
 #include <vector>
 
 namespace {
@@ -105,6 +106,9 @@ void EventAction::EndOfEventAction(const G4Event* event)
     std::array<G4double, static_cast<size_t>(SubChannel::kCount)> eBySub{};
     std::array<G4int,    static_cast<size_t>(SubChannel::kCount)> iBySub{};
 
+    // Dynamic per-fragment (Z,A) aggregation across all hits of this event.
+    std::map<long, FragmentAccum> fragAgg;
+
     std::vector<G4int> clusterSizeEM, clusterSizeHad, clusterSizeTotal;
     if (nHits > 0) {
         clusterSizeEM.reserve(nHits);
@@ -144,7 +148,28 @@ void EventAction::EndOfEventAction(const G4Event* event)
                 eBySub[c] += hit->GetEdepSubChannel(sub);
                 iBySub[c] += hit->GetIonsSubChannel(sub);
             }
+
+            for (const auto& kv : hit->GetFragments()) {
+                auto& fa = fragAgg[kv.first];
+                fa.edep      += kv.second.edep;
+                fa.edepDelta += kv.second.edepDelta;
+                fa.ions      += kv.second.ions;
+            }
         }
+    }
+
+    if (fRunAction) {
+        std::vector<int>    vz, va, vi;
+        std::vector<double> ve, ved;
+        vz.reserve(fragAgg.size());
+        for (const auto& kv : fragAgg) {
+            vz.push_back(static_cast<int>(kv.first / 1000L));
+            va.push_back(static_cast<int>(kv.first % 1000L));
+            ve.push_back(kv.second.edep);
+            ved.push_back(kv.second.edepDelta);
+            vi.push_back(kv.second.ions);
+        }
+        fRunAction->SetFragments(vz, va, ve, ved, vi);
     }
 
     if (fRunAction) {

@@ -92,6 +92,15 @@ RunAction::RunAction(const DetectorConstruction* det) : fDetector(det)
         if (col.isInt) analysis->CreateNtupleIColumn(col.name);
         else           analysis->CreateNtupleDColumn(col.name);
     }
+    // Dynamic per-fragment (Z,A) vector branches (append-only, after the scalar
+    // columns). Variable length per event; grouped on demand in plot.C.
+    if (profile.Has(ScoreGroup::Fragments)) {
+        analysis->CreateNtupleIColumn("Frag_Z",         fFragZ);
+        analysis->CreateNtupleIColumn("Frag_A",         fFragA);
+        analysis->CreateNtupleDColumn("Frag_Edep",      fFragEdep);
+        analysis->CreateNtupleDColumn("Frag_EdepDelta", fFragEdepDelta);
+        analysis->CreateNtupleIColumn("Frag_Ions",      fFragIons);
+    }
     analysis->FinishNtuple();
 
     G4cout << "=== [expLRB] Scoring profile: " << ScoringProfileDescription(profile.name) << " ===" << G4endl;

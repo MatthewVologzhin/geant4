@@ -5,6 +5,7 @@
 #include "G4Accumulable.hh"
 #include "globals.hh"
 #include <memory>
+#include <vector>
 
 class G4Run;
 class RunMessenger;
@@ -25,6 +26,15 @@ public:
         fEdepHad += edepHad;
     }
 
+    // Dynamic per-fragment (Z,A) vectors backing the BioData *vector* branches
+    // (Frag_Z/Frag_A/Frag_Edep/Frag_EdepDelta/Frag_Ions). Filled once per event.
+    void SetFragments(const std::vector<int>& z, const std::vector<int>& a,
+                      const std::vector<double>& edep,
+                      const std::vector<double>& edepDelta,
+                      const std::vector<int>& ions) {
+        fFragZ = z; fFragA = a; fFragEdep = edep; fFragEdepDelta = edepDelta; fFragIons = ions;
+    }
+
     static void SetOutputFileName(const G4String& name) {
         if (!fgFileNameLocked) fgFileName = name;
     }
@@ -43,4 +53,7 @@ private:
 
     G4Accumulable<G4double> fEdepEM{0.0};
     G4Accumulable<G4double> fEdepHad{0.0};
+
+    std::vector<int>    fFragZ, fFragA, fFragIons;
+    std::vector<double> fFragEdep, fFragEdepDelta;
 };

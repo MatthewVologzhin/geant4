@@ -38,6 +38,7 @@ const RegistryType& Registry()
             ScoreGroup::ElectronSpectrum,
             ScoreGroup::ICSD,
             ScoreGroup::HadronVertexZ,
+            ScoreGroup::Fragments,
         }));
         // "full" is the umbrella for additive groups; new groups join it first.
         m.emplace("full", MakeProfile("full", {
@@ -49,6 +50,7 @@ const RegistryType& Registry()
             ScoreGroup::ElectronSpectrum,
             ScoreGroup::ICSD,
             ScoreGroup::HadronVertexZ,
+            ScoreGroup::Fragments,
         }));
         return m;
     }();
@@ -122,6 +124,7 @@ std::string ScoringProfileDescription(std::string_view name)
         {ScoreGroup::ElectronSpectrum, "electron-spectrum"},
         {ScoreGroup::ICSD, "ICSD"},
         {ScoreGroup::HadronVertexZ, "hadron-vertex-z"},
+        {ScoreGroup::Fragments, "fragments"},
     };
     for (const auto& entry : labels) {
         if (p.Has(entry.first)) os << ' ' << entry.second;

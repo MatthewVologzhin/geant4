@@ -24,6 +24,7 @@ enum class ScoreGroup : unsigned {
     ElectronSpectrum,  // SpecIn_Electron (H1)
     ICSD,              // ICSD_* cluster histograms (H1)
     HadronVertexZ,     // HadronVertexZ (H1)
+    Fragments,         // dynamic per-(Z,A) vector branches Frag_* in BioData
     kCount
 };
 

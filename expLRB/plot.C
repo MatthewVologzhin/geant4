@@ -9,7 +9,9 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <TCanvas.h>
@@ -282,6 +284,12 @@ struct ScenarioData {
     };
     std::vector<SpecEntry> spectra;
     TH1D* hHeavyPerNucl{nullptr};
+
+    // Dynamic per-fragment (Z,A) deposits from the vector branches Frag_*
+    // ("fragments" group). Key = Z*1000 + A; value = {direct MeV, delta MeV}.
+    bool hasFragments{false};
+    std::map<long, std::pair<double, double>> fragEdep;
+    std::map<long, long> fragIons;
 };
 
 // ============================================================================
@@ -595,6 +603,22 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
         if (val > 0.0) out.hitEdepByFam[static_cast<size_t>(idx)].push_back(val);
     };
 
+    // Dynamic per-fragment (Z,A) vector branches (optional group).
+    std::vector<int>*    bFragZ = nullptr;
+    std::vector<int>*    bFragA = nullptr;
+    std::vector<double>* bFragE = nullptr;
+    std::vector<double>* bFragEd = nullptr;
+    std::vector<int>*    bFragI = nullptr;
+    out.hasFragments = hasBranch("Frag_Z") && hasBranch("Frag_A") &&
+                       hasBranch("Frag_Edep") && hasBranch("Frag_EdepDelta");
+    if (out.hasFragments) {
+        tree->SetBranchAddress("Frag_Z",         &bFragZ);
+        tree->SetBranchAddress("Frag_A",         &bFragA);
+        tree->SetBranchAddress("Frag_Edep",      &bFragE);
+        tree->SetBranchAddress("Frag_EdepDelta", &bFragEd);
+        if (hasBranch("Frag_Ions")) tree->SetBranchAddress("Frag_Ions", &bFragI);
+    }
+
     for (Long64_t ev = 0; ev < out.nEvents; ++ev) {
         tree->GetEntry(ev);
         out.fam[static_cast<size_t>(FamilyIdx::Total)].Add(eTot, iTot);
@@ -624,6 +648,21 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
         for (size_t c = 0; c < ScenarioData::kSubCount; ++c) {
             out.subEdepMeV[c] += subEdep[c];
             out.subIonCount[c] += subIons[c];
+        }
+
+        if (out.hasFragments && bFragZ && bFragA && bFragE && bFragEd) {
+            size_t k = bFragZ->size();
+            k = std::min(k, bFragA->size());
+            k = std::min(k, bFragE->size());
+            k = std::min(k, bFragEd->size());
+            for (size_t j = 0; j < k; ++j) {
+                const long key = static_cast<long>((*bFragZ)[j]) * 1000L + (*bFragA)[j];
+                auto& slot = out.fragEdep[key];
+                const double ed = (*bFragEd)[j];
+                slot.second += ed;                       // delta
+                slot.first  += (*bFragE)[j] - ed;        // direct
+                if (bFragI && j < bFragI->size()) out.fragIons[key] += (*bFragI)[j];
+            }
         }
 
         if (iTot > 0) out.hitIonsTot.push_back(iTot);
@@ -932,6 +971,75 @@ static void PlotSingleSubChannels(const ScenarioData& d, const AnalysisConfig& a
     outDir->cd();
     h->Write();
     delete h;
+}
+
+// Dynamic per-fragment breakdown: dose deposited by each hadron fragment,
+// split into the fragment's own deposit ("direct") and its delta-rays ("delta").
+// Grouped by element (Z); isotopes are merged for readability.
+static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
+    if (!ac.plotSubChannels.enabled || d.nEvents <= 0 || !d.hasFragments || d.fragEdep.empty()) return;
+    const auto& pc = ac.plotSubChannels;
+    const double scale = ac.normPrimaries / static_cast<double>(d.nEvents);
+
+    auto symbol = [](int z) -> const char* {
+        static const char* s[] = {"n","H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca"};
+        return (z >= 0 && z < 21) ? s[z] : "?";
+    };
+
+    std::map<int, std::pair<double, double>> byZ;  // Z -> {direct MeV, delta MeV}
+    for (const auto& kv : d.fragEdep) {
+        const int Z = static_cast<int>(kv.first / 1000L);
+        byZ[Z].first  += kv.second.first;
+        byZ[Z].second += kv.second.second;
+    }
+    std::vector<std::pair<int, std::pair<double, double>>> vec(byZ.begin(), byZ.end());
+    std::sort(vec.begin(), vec.end(),
+              [](const auto& a, const auto& b) {
+                  return (a.second.first + a.second.second) > (b.second.first + b.second.second);
+              });
+    const int n = static_cast<int>(vec.size());
+    if (n == 0) return;
+
+    auto toDose = [&](double edepMeV) { return d.hasMass ? EdepMeVToGy(edepMeV, d.targetMassKg) * scale
+                                                         : edepMeV * scale; };
+
+    auto* hDir = new TH1D(Form("hFragDir_%s", d.cfg.tag.c_str()), "", n, 0, n);
+    auto* hDel = new TH1D(Form("hFragDel_%s", d.cfg.tag.c_str()), "", n, 0, n);
+    for (int i = 0; i < n; ++i) {
+        hDir->SetBinContent(i + 1, toDose(vec[i].second.first));
+        hDel->SetBinContent(i + 1, toDose(vec[i].second.second));
+        hDir->GetXaxis()->SetBinLabel(i + 1, Form("%s (Z=%d)", symbol(vec[i].first), vec[i].first));
+    }
+
+    auto* c = new TCanvas(Form("c_frag_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(),
+                          ac.canvasWidth, ac.canvasHeight);
+    auto* p = new TPad("p", "", 0, 0, 1, 1);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(0.22);
+    p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
+    p->Draw(); p->cd();
+
+    hDel->SetFillColor(kRed + 1);   hDel->SetFillStyle(1001); hDel->SetLineColor(kRed + 1);
+    hDir->SetFillColor(kAzure + 1); hDir->SetFillStyle(1001); hDir->SetLineColor(kAzure + 1);
+    hDir->GetXaxis()->LabelsOption("u"); hDir->GetXaxis()->SetLabelSize(0.030);
+    hDir->GetYaxis()->SetTitle(d.hasMass ? pc.yTitle.c_str()
+                                         : Form("Energy deposited [MeV per %s]", ac.normLabel.c_str()));
+    hDir->GetYaxis()->SetTitleSize(0.042); hDir->GetYaxis()->SetTitleOffset(1.12);
+    hDir->Draw("BAR1");
+    hDel->Draw("BAR1 SAME");
+    hDir->Draw("BAR1 SAME");
+
+    auto* leg = new TLegend(0.55, 0.80, 0.90, 0.89);
+    leg->SetBorderSize(0); leg->SetTextSize(0.030);
+    leg->AddEntry(hDir, "fragment direct", "f");
+    leg->AddEntry(hDel, "fragment delta-rays", "f");
+    leg->Draw();
+    DrawHeaderBanner(p, Form("#bf{%s}  |  %s", pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()),
+                     ac.leftMargin, 0.942, pc.textSize);
+    p->RedrawAxis(); c->Update();
+    std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_ByFragment_" + d.cfg.tag) << "\n";
+    delete c;
+    outDir->cd(); hDir->Write(); hDel->Write(); delete hDir; delete hDel;
 }
 
 static void PlotSingleEdepEventDist(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
@@ -1980,6 +2088,7 @@ void analyzeLRB() {
         PlotSingleFragmentCounts(d, ac, sub);
         PlotSingleICSD(d, ac, sub);
         PlotSingleSpectraAndKinematics(d, ac, sub);
+        if (d.hasFragments) PlotSingleFragments(d, ac, sub);
     }
 
     if (loaded.size() >= 2) {

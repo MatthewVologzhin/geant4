@@ -217,6 +217,16 @@ G4bool BioSensitiveDetector::ProcessHits(G4Step* step, G4TouchableHistory*)
     }
 
     hit->AddHit(orig, spec, sub, edep, nIons, nStandardIons);
+
+    // Dynamic per-fragment (Z,A) bookkeeping for hadronic-cascade tracks only.
+    if (info && info->IsHadronic()) {
+        const G4int fz = info->GetFragmentZ();
+        if (fz > 0) {
+            const G4bool isDelta = (sub == SubChannel::PrimaryDeltaRays ||
+                                    sub == SubChannel::HadronicDeltaRays);
+            hit->AddFragment(fz, info->GetFragmentA(), edep, isDelta, nIons);
+        }
+    }
     return true;
 }
 

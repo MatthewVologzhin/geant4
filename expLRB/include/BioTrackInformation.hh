@@ -48,8 +48,18 @@ public:
     void SetSubChannel(SubChannel s) noexcept { fSubChannel = s; }
     [[nodiscard]] SubChannel GetSubChannel() const noexcept { return fSubChannel; }
 
+    // Fragment identity (dynamic): the (Z,A) of the hadron this track belongs to.
+    // Set on the fragment itself and inherited by its delta-rays, so a delta-ray
+    // can be attributed to the specific hadron that produced it. Z==0 means the
+    // track is not a hadronic fragment (primary ion / primary delta-rays).
+    void SetFragmentZA(int z, int a) noexcept { fFragZ = z; fFragA = a; }
+    [[nodiscard]] int GetFragmentZ() const noexcept { return fFragZ; }
+    [[nodiscard]] int GetFragmentA() const noexcept { return fFragA; }
+
 private:
     OriginChannel   fOrigin{OriginChannel::PrimaryEM};
     FragmentSpecies fSpecies{FragmentSpecies::None};
     SubChannel      fSubChannel{SubChannel::PrimaryDeltaRays};
+    int             fFragZ{0};
+    int             fFragA{0};
 };
