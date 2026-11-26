@@ -3,7 +3,7 @@
 /control/verbose 1
 /run/verbose 1
 /run/numberOfThreads 10
-/run/printProgress 2000
+/run/printProgress 8000
 # --- Physics (PreInit) ---
 /physics/setHadronic none
 /physics/enableHadronic false
@@ -70,5 +70,5 @@
 /gun/energy 1.0 GeV
 /expLRB/gun/setRadius 7 mm
 # Event count is resolved by /bio/run/beamOn (override with --events N)
-/bio/run/setEvents 1000000
+/bio/run/setEvents 4000000
 /bio/run/beamOn
