@@ -290,6 +290,9 @@ struct ScenarioData {
     bool hasFragments{false};
     std::map<long, std::pair<double, double>> fragEdep;
     std::map<long, long> fragIons;
+
+    // Hadronic-interaction birth position along the beam axis (H1, mm).
+    TH1D* hHadronVertexZ{nullptr};
 };
 
 // ============================================================================
@@ -708,6 +711,7 @@ static bool LoadScenarioData(const ScenarioConfig& sc, ScenarioData& out) {
         out.spectra.push_back(std::move(entry));
     }
     out.hHeavyPerNucl = CloneHistStrict(file, "SpecIn_HeavyPerNucl", sc.tag);
+    out.hHadronVertexZ = CloneHistStrict(file, "HadronVertexZ", sc.tag);
 
     file->Close();
     delete file;
@@ -1019,27 +1023,64 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
 
-    hDel->SetFillColor(kRed + 1);   hDel->SetFillStyle(1001); hDel->SetLineColor(kRed + 1);
-    hDir->SetFillColor(kAzure + 1); hDir->SetFillStyle(1001); hDir->SetLineColor(kAzure + 1);
-    hDir->GetXaxis()->LabelsOption("u"); hDir->GetXaxis()->SetLabelSize(0.030);
-    hDir->GetYaxis()->SetTitle(d.hasMass ? pc.yTitle.c_str()
-                                         : Form("Energy deposited [MeV per %s]", ac.normLabel.c_str()));
-    hDir->GetYaxis()->SetTitleSize(0.042); hDir->GetYaxis()->SetTitleOffset(1.12);
-    hDir->Draw("BAR1");
-    hDel->Draw("BAR1 SAME");
+    // True stacked bars: draw the cumulative (direct+delta) first, then the
+    // direct part on top, so BOTH segments stay visible (a plain BAR1 SAME
+    // overlay would hide the delta contribution behind the direct one).
+    auto* hStack = static_cast<TH1D*>(hDir->Clone(Form("hFragStack_%s", d.cfg.tag.c_str())));
+    hStack->Add(hDel);  // total = direct + delta
+    hStack->SetFillColor(kRed + 1);   hStack->SetFillStyle(1001); hStack->SetLineColor(kRed + 1);
+    hDir->SetFillColor(kAzure + 1);   hDir->SetFillStyle(1001);   hDir->SetLineColor(kAzure + 1);
+    hStack->GetXaxis()->LabelsOption("u"); hStack->GetXaxis()->SetLabelSize(0.030);
+    hStack->GetYaxis()->SetTitle(d.hasMass ? pc.yTitle.c_str()
+                                           : Form("Energy deposited [MeV per %s]", ac.normLabel.c_str()));
+    hStack->GetYaxis()->SetTitleSize(0.042); hStack->GetYaxis()->SetTitleOffset(1.12);
+    hStack->SetBarWidth(1.0); hStack->SetBarOffset(0.0);
+    hDir->SetBarWidth(1.0);   hDir->SetBarOffset(0.0);
+    hStack->Draw("BAR1");
     hDir->Draw("BAR1 SAME");
 
-    auto* leg = new TLegend(0.55, 0.80, 0.90, 0.89);
+    auto* leg = new TLegend(0.52, 0.78, 0.90, 0.89);
     leg->SetBorderSize(0); leg->SetTextSize(0.030);
     leg->AddEntry(hDir, "fragment direct", "f");
-    leg->AddEntry(hDel, "fragment delta-rays", "f");
+    leg->AddEntry(hStack, "fragment delta-rays", "f");
     leg->Draw();
     DrawHeaderBanner(p, Form("#bf{%s}  |  %s", pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()),
                      ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
     std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_ByFragment_" + d.cfg.tag) << "\n";
     delete c;
-    outDir->cd(); hDir->Write(); hDel->Write(); delete hDir; delete hDel;
+    outDir->cd(); hDir->Write(); hStack->Write(); delete hDir; delete hStack; delete hDel;
+}
+
+// Hadronic interaction vertices along the beam axis z: where in the tract (which
+// filter layer) hadronic processes are born -> "which filter carries the threat".
+static void PlotSingleHadronVertexZ(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
+    if (d.nEvents <= 0 || !d.hHadronVertexZ || d.hHadronVertexZ->GetEntries() <= 0.0) return;
+    const auto& pc = ac.plotSpectra;
+    auto* h = static_cast<TH1D*>(d.hHadronVertexZ->Clone(Form("hHvz_%s", d.cfg.tag.c_str())));
+    h->SetDirectory(nullptr);
+    if (pc.rebin > 1) h->Rebin(pc.rebin);
+    h->Scale(ac.normPrimaries / static_cast<double>(d.nEvents));
+
+    auto* c = new TCanvas(Form("c_hvz_%s", d.cfg.tag.c_str()), "Hadronic vertices vs z",
+                          ac.canvasWidth, ac.canvasHeight);
+    auto* p = new TPad("p", "", 0, 0, 1, 1);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(ac.bottomMargin);
+    p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
+    p->Draw(); p->cd();
+    h->SetLineColor(d.cfg.color); h->SetLineWidth(2);
+    h->SetFillColor(d.cfg.color); h->SetFillStyle(3004);
+    h->GetXaxis()->SetTitle("z [mm]");
+    h->GetYaxis()->SetTitle(Form("Hadronic vertices per %s", ac.normLabel.c_str()));
+    h->GetYaxis()->SetTitleSize(0.042); h->GetYaxis()->SetTitleOffset(1.15);
+    h->Draw("HIST");
+    DrawHeaderBanner(p, Form("#bf{Hadronic vertices vs z}  |  %s", d.cfg.legendLabel.c_str()),
+                     ac.leftMargin, 0.942, pc.textSize);
+    p->RedrawAxis(); c->Update();
+    std::cout << "  [Saved] " << SavePlot(c, ac, "HadronVertexZ_" + d.cfg.tag) << "\n";
+    delete c;
+    outDir->cd(); h->Write(); delete h;
 }
 
 static void PlotSingleEdepEventDist(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
@@ -1932,6 +1973,8 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
         const TH1D* src = nullptr;
         if (isICSD) {
             src = d.hIcsdTargetTot;
+        } else if (std::string(histKey) == "HadronVertexZ") {
+            src = d.hHadronVertexZ;
         } else {
             for (const auto& sp : d.spectra) {
                 if (sp.key == histKey) { src = sp.hist; break; }
@@ -2089,6 +2132,7 @@ void analyzeLRB() {
         PlotSingleICSD(d, ac, sub);
         PlotSingleSpectraAndKinematics(d, ac, sub);
         if (d.hasFragments) PlotSingleFragments(d, ac, sub);
+        PlotSingleHadronVertexZ(d, ac, sub);
     }
 
     if (loaded.size() >= 2) {
@@ -2098,6 +2142,7 @@ void analyzeLRB() {
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotICSD,    "ICSD_Target_Total", true,  "Compare_ICSD_Target_Total", cmpDir);
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "SpecIn_Proton",     false, "Compare_SpecIn_Proton",     cmpDir);
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "SpecIn_Alpha",      false, "Compare_SpecIn_Alpha",      cmpDir);
+        PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "HadronVertexZ",     false, "Compare_HadronVertexZ",     cmpDir);
     }
 
     outRoot->Write();
