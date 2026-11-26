@@ -133,7 +133,7 @@ struct AnalysisConfig {
     };
 
     PlotConfig plotEdepBySpeciesLinear {
-        true, false, false, false, 0.0, 5.0, 0.0, 0.0, 0, 2.5, 1,
+        true, true, false, false, 0.0, 5.0, 0.0, 0.0, 0, 2.5, 1,
         "Energy Deposition by Particle Family (linear, direct-flight peak)",
         "Energy deposited in target, E_{dep} [MeV]",
         "Events per primary (dN/dE)",
@@ -1257,8 +1257,22 @@ static void PlotSingleEdepBySpeciesLinear(const ScenarioData& d, const AnalysisC
         {FamilyIdx::Neutron,   "Neutrons (n)",         kViolet + 1,  2}
     };
 
-    const double lo = pc.xMin;
-    const double hi = pc.xMax;
+    // Data-driven linear x-window when autoRange is set; a fixed 0..5 MeV window
+    // would leave the low-Edep cell scenarios (E_dep ~ 1e-4 MeV) invisible at 0.
+    double dataMin = std::numeric_limits<double>::max(), dataMax = 0.0;
+    if (pc.autoRange) {
+        for (const auto& sc : curves) {
+            for (const double v : d.hitEdepByFam[static_cast<size_t>(sc.idx)]) {
+                if (v > 0.0) { dataMin = std::min(dataMin, v); dataMax = std::max(dataMax, v); }
+            }
+        }
+    }
+    double lo = pc.xMin, hi = pc.xMax;
+    if (pc.autoRange && dataMax > 0.0) {
+        lo = std::max(0.0, dataMin * 0.8);
+        hi = dataMax * 1.1;
+        if (hi <= lo) hi = lo + 1.0;
+    }
     if (hi <= lo) return;
     const double w = 1.0 / static_cast<double>(d.nEvents);
 
