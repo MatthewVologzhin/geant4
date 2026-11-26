@@ -1,0 +1,14 @@
+# Analytic pure-EM stopping-power probe (G4EmCalculator), no DNA, no hadronics.
+# Usage: ./build/expLRB -m config/dedx_emcalc.mac --threads 1
+# Prints electronic/nuclear/total dE/dx and the integrated deposit over 10 um.
+/physics/setHadronic none
+/physics/enableHadronic false
+/physics/setEM EM_Opt4
+/physics/enableDNAActivator false
+/run/initialize
+# Same velocity (40 MeV/nucleon): stopping must scale as z^2.
+/expLRB/dedx/print G4_WATER 1 1 40 MeV 10 um
+/expLRB/dedx/print G4_WATER 2 4 160 MeV 10 um
+/expLRB/dedx/print G4_WATER 6 12 480 MeV 10 um
+# The 20Ne 800 MeV validation case (test_dedx / test_dedx_em).
+/expLRB/dedx/print G4_WATER 10 20 800 MeV 10 um

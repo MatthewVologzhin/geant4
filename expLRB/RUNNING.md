@@ -127,6 +127,21 @@ scripts/gen_macros.sh /path/other.conf  # альтернативный конф�
 Seed печатается в `G4cout` (`=== [expLRB] Engine Seed ... ===`) — сохраняйте его для
 воспроизведения.
 
+### Аналитическая оценка dE/dx (`G4EmCalculator`)
+
+Независимая оценка чистой EM-остановки (без DNA и адроники), для сверки с прогонами:
+
+```bash
+./build/expLRB -m config/dedx_emcalc.mac --threads 1
+# или разово, после /run/initialize:
+#   /expLRB/dedx/print <material> <Z> <A> <energy> <unit> [thickness <unit>] [region <name>]
+#   /expLRB/dedx/print G4_WATER 10 20 800 MeV 10 um
+#   /expLRB/dedx/print G4_WATER 10 20 800 MeV 10 um region BioRegion
+```
+
+Печатает electronic/nuclear/total dE/dx (кэВ/µm) и интеграл по толщине (МэВ). Для 20Ne 800 МэВ в
+`G4_WATER` эталон: **146.5 кэВ/µm → 1.467 МэВ за 10 µm**. Подробности и разбор сборок — `PROJECT_MEMORY.md` §9.
+
 ---
 
 ## 4. Выбор скоринг-профиля
