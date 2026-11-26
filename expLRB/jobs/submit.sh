@@ -12,7 +12,7 @@
 #   jobs/submit.sh --dry-run             # print planned jobs, submit nothing
 #
 # Env:
-#   EVENTS_TOTAL     total events per configuration (default 1000000)
+#   EVENTS_TOTAL     override total events per configuration (default: manifest per-scenario)
 #   EVENTS_PER_JOB   events per chunk/job         (default 50000 -> 20 jobs)
 #   THREADS          threads per job; cluster default is 1 (single-thread)  (default 1)
 #   MEMORY           memory per job in MB (overrides manifest per-sample)   (default: manifest)
@@ -29,7 +29,9 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SELF_DIR/.." && pwd)"
 
-EVENTS_TOTAL="${EVENTS_TOTAL:-1000000}"
+# Unset EVENTS_TOTAL -> use each scenario's own total from the manifest (column
+# 'events', generated from runs.conf). Set it only to override ALL scenarios.
+EVENTS_TOTAL="${EVENTS_TOTAL:-}"
 EVENTS_PER_JOB="${EVENTS_PER_JOB:-50000}"
 # Unique per-submission label embedded in every chunk name. Without it a second
 # submission reuses "<tag>_<proc>.root" and overwrites the previous chunks; with
@@ -58,7 +60,8 @@ done
 
 [[ -f "$MANIFEST" ]] || { echo "[submit] manifest not found: $MANIFEST (run scripts/gen_macros.sh)" >&2; exit 1; }
 
-NJOBS=$(( (EVENTS_TOTAL + EVENTS_PER_JOB - 1) / EVENTS_PER_JOB ))
+# Per-scenario job count is computed inside the loop below from the manifest
+# 'events' column (or EVENTS_TOTAL when it is set explicitly).
 
 # --- scheduler selection ---
 if [[ "$SCHEDULER" == "auto" ]]; then
@@ -96,7 +99,7 @@ fi
 
 mkdir -p "$RAW_DIR" logs "$ROOT/output/submit"
 
-echo "[submit] scheduler=${SCHEDULER}  scenarios=${#rows[@]}  jobs/config=$NJOBS  events/job=$EVENTS_PER_JOB  events/config=$EVENTS_TOTAL"
+echo "[submit] scheduler=${SCHEDULER}  scenarios=${#rows[@]}  events/job=$EVENTS_PER_JOB  ${EVENTS_TOTAL:+events/config(override)=$EVENTS_TOTAL}"
 
 # --- submit ---
 for row in "${rows[@]}"; do
@@ -105,6 +108,8 @@ for row in "${rows[@]}"; do
   threads="${THREADS:-1}"   # cluster default: single-thread per task (override with THREADS=N)
   memory="${MEMORY:-${memory:-2000}}"   # MB (per-scenario from manifest; override with MEMORY)
   disk="${DISK:-${disk:-2000}}"         # MB (per-scenario from manifest; override with DISK)
+  ev_total="${EVENTS_TOTAL:-$events}"   # per-scenario total (manifest) unless overridden
+  NJOBS=$(( (ev_total + EVENTS_PER_JOB - 1) / EVENTS_PER_JOB ))
 
   [[ -f "$mac" ]] || { echo "[submit] skip missing macro: $mac" >&2; continue; }
 
