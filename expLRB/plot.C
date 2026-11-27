@@ -518,17 +518,22 @@ static void DrawHeaderBanner(TPad* pad, const std::string& text, double xLeft, d
     tex.DrawLatex(xLeft, yTop, text.c_str());
 }
 
-// Categorical colour for index i, spread over the hue wheel by the golden-ratio
-// low-discrepancy sequence, with a lightness that cycles so hues that repeat
-// after a full turn of the wheel stay distinguishable. Stays distinct for any
-// number of series/elements (no repeated greens or "everything grey").
-static Int_t DistinctColor(int i) {
-    const double golden = 0.6180339887498949;
-    const double x = 0.139 + static_cast<double>(i) * golden;
-    const double h = std::fmod(x, 1.0);
-    static const double lvals[] = {0.46, 0.34, 0.58};
-    const double l = lvals[static_cast<int>(std::floor(x)) % 3];
-    const double s = 0.75;
+// Chemical symbol for atomic number z (0 = neutron). Full periodic table so
+// fragments heavier than Ca are no longer shown as "?".
+static const char* ElemSymbol(int z) {
+    static const char* s[] = {
+        "n","H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca",
+        "Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr","Rb","Sr","Y","Zr",
+        "Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe","Cs","Ba","La","Ce","Pr","Nd",
+        "Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu","Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg",
+        "Tl","Pb","Bi","Po","At","Rn","Fr","Ra","Ac","Th","Pa","U"
+    };
+    const int n = static_cast<int>(sizeof(s) / sizeof(s[0]));
+    return (z >= 0 && z < n) ? s[z] : "?";
+}
+
+// HSL (h, s, l in 0..1) -> ROOT colour index.
+static Int_t HslToColor(double h, double s, double l) {
     auto hue2rgb = [](double p, double q, double t) {
         if (t < 0.0) t += 1.0;
         if (t > 1.0) t -= 1.0;
@@ -543,6 +548,49 @@ static Int_t DistinctColor(int i) {
     const int g = static_cast<int>(std::lround(255.0 * hue2rgb(p, q, h)));
     const int b = static_cast<int>(std::lround(255.0 * hue2rgb(p, q, h - 1.0 / 3.0)));
     return TColor::GetColor(r, g, b);
+}
+
+// RGB (0..1) -> H, S, L (0..1).
+static void RgbToHsl(double r, double g, double b, double& h, double& s, double& l) {
+    const double mx = std::max(r, std::max(g, b));
+    const double mn = std::min(r, std::min(g, b));
+    l = 0.5 * (mx + mn);
+    const double d = mx - mn;
+    if (d < 1e-9) { h = 0.0; s = 0.0; return; }
+    s = (l > 0.5) ? d / (2.0 - mx - mn) : d / (mx + mn);
+    if (mx == r)      h = (g - b) / d + (g < b ? 6.0 : 0.0);
+    else if (mx == g) h = (b - r) / d + 2.0;
+    else              h = (r - g) / d + 4.0;
+    h /= 6.0;
+}
+
+// Categorical colour for index i, spread over the hue wheel by the golden-ratio
+// low-discrepancy sequence, with a lightness that cycles so hues that repeat
+// after a full turn of the wheel stay distinguishable. Stays distinct for any
+// number of series/elements (no repeated greens or "everything grey").
+static Int_t DistinctColor(int i) {
+    const double golden = 0.6180339887498949;
+    const double x = 0.139 + static_cast<double>(i) * golden;
+    const double h = std::fmod(x, 1.0);
+    static const double lvals[] = {0.46, 0.34, 0.58};
+    const double l = lvals[static_cast<int>(std::floor(x)) % 3];
+    return HslToColor(h, 0.75, l);
+}
+
+// A shade of a base colour: index i of k isotopes keeps the element hue but
+// sweeps the lightness, so isotopes inside one element column stay
+// distinguishable without leaving the element's colour family.
+static Int_t ShadeColor(Int_t base, int i, int k) {
+    TColor* c = gROOT->GetColor(base);
+    if (!c) return base;
+    Float_t rf, gf, bf;
+    c->GetRGB(rf, gf, bf);
+    double h, s, l;
+    RgbToHsl(rf, gf, bf, h, s, l);
+    const double t = (k > 1) ? static_cast<double>(i) / static_cast<double>(k - 1) : 0.5;
+    const double L = 0.30 + 0.44 * t;   // 0.30 (dark) .. 0.74 (light)
+    const double S = std::max(0.78, s);
+    return HslToColor(h, S, L);
 }
 
 // Compact a verbose scenario label so crowded comparison legends stay legible.
@@ -1102,22 +1150,25 @@ static void PlotSingleSubChannels(const ScenarioData& d, const AnalysisConfig& a
 
 // Dynamic per-fragment breakdown: dose deposited by each hadron fragment,
 // split into the fragment's own deposit ("direct") and its delta-rays ("delta").
-// Grouped by element (Z); isotopes are merged for readability.
+// Bars are grouped by element (Z); within one element column the isotopes are
+// drawn as shades of the element colour (bottom = lightest ... top = darkest)
+// and their mass numbers are annotated where the segment is resolvable.
 static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
     if (!ac.plotSubChannels.enabled || d.nEvents <= 0 || !d.hasFragments || d.fragEdep.empty()) return;
     const auto& pc = ac.plotSubChannels;
     const double scale = ac.normPrimaries / static_cast<double>(d.nEvents);
 
-    auto symbol = [](int z) -> const char* {
-        static const char* s[] = {"n","H","He","Li","Be","B","C","N","O","F","Ne","Na","Mg","Al","Si","P","S","Cl","Ar","K","Ca"};
-        return (z >= 0 && z < 21) ? s[z] : "?";
-    };
+    auto symbol = [](int z) -> const char* { return ElemSymbol(z); };
 
-    std::map<int, std::pair<double, double>> byZ;  // Z -> {direct MeV, delta MeV}
+    struct Iso { int A; double direct, delta; };
+    std::map<int, std::pair<double, double>> byZ;   // Z -> {direct MeV, delta MeV}
+    std::map<int, std::vector<Iso>>          isoByZ; // Z -> isotopes
     for (const auto& kv : d.fragEdep) {
         const int Z = static_cast<int>(kv.first / 1000L);
+        const int A = static_cast<int>(kv.first % 1000L);
         byZ[Z].first  += kv.second.first;
         byZ[Z].second += kv.second.second;
+        isoByZ[Z].push_back({A, kv.second.first, kv.second.second});
     }
     std::vector<std::pair<int, std::pair<double, double>>> vec(byZ.begin(), byZ.end());
     std::sort(vec.begin(), vec.end(),
@@ -1159,34 +1210,47 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     hF->SetStats(0);
     hF->Draw("AXIS");
 
-    // Stacked solid segments: direct deposit at the bottom (element colour), the
-    // delta-ray part as a cap on top (uniform contrasting grey). Solid fills are
-    // used on purpose: ROOT's SVG backend does not preserve hatched fills, which
-    // previously made the delta-ray contribution invisible. The legend lives in
-    // the right margin (outside the frame) so it never covers the bars.
+    // Each column = one element (a union of its isotopes). Within a column the
+    // isotopes are stacked as shades of the element colour (bottom = dark ...
+    // top = light), the delta-ray part stays a uniform grey cap on top, and the
+    // mass number is annotated on each resolvable isotope segment. Solid fills
+    // (not hatched) are used because ROOT's SVG backend does not preserve
+    // hatches. The legend lives in the right margin (outside the frame).
     const Int_t deltaCol = kGray + 1;
     std::vector<TObject*> legObjs; std::vector<std::string> legLabs;
+    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(0.012); aLab.SetTextAlign(21);
     for (int i = 0; i < n; ++i) {
         const int Z = vec[i].first;
-        const double dv = toDose(vec[i].second.first);
-        const double lv = toDose(vec[i].second.second);
-        const Int_t col = elemColor(Z);
-        // cumulative (direct + delta) first: full bar drawn in the delta shade ...
-        if (lv > 0.0) {
+        const double Dtot = vec[i].second.first;   // element direct (MeV)
+        const double Ltot = vec[i].second.second;  // element delta  (MeV)
+        const Int_t base  = elemColor(Z);
+        // full height first: delta-rays as a grey cap on top of everything
+        if (Ltot > 0.0 && toDose(Dtot + Ltot) > 0.0) {
             auto* hb = new TH1D(Form("hFragD_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
-            hb->SetBinContent(1, dv + lv);
+            hb->SetBinContent(1, toDose(Dtot + Ltot));
             hb->SetFillColor(deltaCol); hb->SetFillStyle(1001); hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
         }
-        // ... then the direct part solid on top, so the visible cap = delta-rays.
-        if (dv > 0.0) {
-            auto* hb = new TH1D(Form("hFragB_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
-            hb->SetBinContent(1, dv);
-            hb->SetFillColor(col); hb->SetFillStyle(1001); hb->SetLineColor(kBlack); hb->SetLineWidth(1);
+        // isotopes of this element, ascending mass number (bottom -> top)
+        auto isos = isoByZ[Z];
+        std::sort(isos.begin(), isos.end(), [](const Iso& x, const Iso& y) { return x.A < y.A; });
+        const int ni = static_cast<int>(isos.size());
+        double cum = 0.0, prev = 0.0;
+        for (int k = 0; k < ni; ++k) {
+            cum += isos[k].direct;
+            const double hi = toDose(cum);
+            if (hi <= 0.0) continue;
+            auto* hb = new TH1D(Form("hFragI_%d_%d_%s", i, isos[k].A, d.cfg.tag.c_str()), "", 1, i, i + 1);
+            hb->SetBinContent(1, hi);
+            hb->SetFillColor(ShadeColor(base, k, ni)); hb->SetFillStyle(1001);
+            hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
+            const double lo = toDose(prev);
+            if (ni <= 8 && lo > 0.0 && hi / lo > 1.30) aLab.DrawLatex(i + 0.5, hi * 1.06, Form("%d", isos[k].A));
+            prev = cum;
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
-        hleg->SetFillColor(col); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
+        hleg->SetFillColor(base); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
         legObjs.push_back(hleg); legLabs.push_back(Form("%s (Z=%d)", symbol(Z), Z));
     }
     // Explicit delta-ray key so the top cap is unambiguous in the legend.
