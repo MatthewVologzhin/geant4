@@ -1218,7 +1218,21 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     // hatches. The legend lives in the right margin (outside the frame).
     const Int_t deltaCol = kGray + 1;
     std::vector<TObject*> legObjs; std::vector<std::string> legLabs;
-    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(0.012); aLab.SetTextAlign(21);
+    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(0.011); aLab.SetTextAlign(21);
+    // Map a y-value to a fraction of the pad height (and back), so isotope
+    // labels can be de-overlapped in pad space and leaders drawn to their bands.
+    const double yLo = pc.logY ? pc.yMin : 0.0;
+    const double yHi = pc.logY ? maxVal * 40.0 : maxVal * 1.2;
+    const double logLo = std::log10(std::max(yLo, 1e-300));
+    const double logHi = std::log10(std::max(yHi, 1e-299));
+    auto toFrac = [&](double v) {
+        if (pc.logY) return (v > 0.0) ? (std::log10(v) - logLo) / (logHi - logLo) : 0.0;
+        return (yHi > yLo) ? (v - yLo) / (yHi - yLo) : 0.0;
+    };
+    auto toVal = [&](double f) {
+        const double fc = std::min(0.999, std::max(0.001, f));
+        return pc.logY ? yLo * std::pow(10.0, fc * (logHi - logLo)) : yLo + fc * (yHi - yLo);
+    };
     for (int i = 0; i < n; ++i) {
         const int Z = vec[i].first;
         const double Dtot = vec[i].second.first;   // element direct (MeV)
@@ -1252,13 +1266,38 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
             hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
         }
-        // mass-number labels on the isotope bands that are resolvable
-        if (ni <= 12) {
+        // Mass-number labels: place each on its isotope band when the band is
+        // tall enough to hold the text; otherwise nudge it vertically within the
+        // column and connect it to the band with a thin leader line. This keeps
+        // every number tied to its own colour band without a diagonal pile-up.
+        if (ni <= 16) {
+            std::vector<double> bandF(ni, -1.0), labF(ni, -1.0);
             for (int k = 0; k < ni; ++k) {
-                const double hi = toDose(cum[k]);
-                const double lo = (k == 0) ? 0.0 : toDose(cum[k - 1]);
-                if (hi <= 0.0) continue;
-                if (k == 0 || hi / lo > 1.30) aLab.DrawLatex(i + 0.5, hi * 1.06, Form("%d", isos[k].A));
+                const double ehi = toDose(cum[k]);
+                const double elo = (k == 0) ? yLo : toDose(cum[k - 1]);
+                if (ehi <= 0.0) continue;
+                bandF[k] = 0.5 * (toFrac(ehi) + toFrac(std::max(elo, yLo)));
+                labF[k]  = bandF[k];
+            }
+            // de-overlap: enforce a minimum separation, then keep inside [0.03,0.97]
+            const double minSep = 0.017;
+            double prev = -1e9;
+            for (int k = 0; k < ni; ++k) {
+                if (labF[k] < 0) continue;
+                if (labF[k] < prev + minSep) labF[k] = prev + minSep;
+                prev = labF[k];
+            }
+            if (prev > 0.97) { const double sh = prev - 0.97; for (int k = 0; k < ni; ++k) if (labF[k] >= 0) labF[k] -= sh; }
+            for (int k = 0; k < ni; ++k) {
+                if (labF[k] < 0) continue;
+                const bool leader = std::fabs(labF[k] - bandF[k]) > 0.010;
+                const double xLab = i + 0.5 + (leader ? 0.20 : 0.0);
+                aLab.SetTextAlign(leader ? 12 : 21);
+                aLab.DrawLatex(xLab, toVal(labF[k]), Form("%d", isos[k].A));
+                if (leader) {
+                    auto* ln = new TLine(i + 0.5, toVal(bandF[k]), xLab - 0.02, toVal(labF[k]));
+                    ln->SetLineColor(kBlack); ln->SetLineWidth(1); ln->Draw();
+                }
             }
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
