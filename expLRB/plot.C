@@ -518,17 +518,27 @@ static void DrawHeaderBanner(TPad* pad, const std::string& text, double xLeft, d
     tex.DrawLatex(xLeft, yTop, text.c_str());
 }
 
-// Distinct per-scenario colour assigned by position, so comparison overlays that
-// would otherwise reuse the auto-generated palette (monolayer/suspension share
-// colours) stay readable.
-static Int_t DistinctColorByIndex(int i) {
-    static const Int_t pal[] = {
-        kBlue + 1,   kRed + 1,     kGreen + 2,  kOrange + 7, kMagenta + 1,
-        kCyan + 2,   kViolet + 1,  kTeal + 2,   kPink + 1,   kAzure + 1,
-        kSpring + 3, kViolet + 6,  kOrange - 3, kGreen + 3,  kRed - 4, kBlue - 7
+// Categorical colour for index i, spread over the hue wheel by the golden-ratio
+// low-discrepancy sequence. Unlike a hand-rolled list this stays distinct for
+// any number of series/elements (no repeated greens or "everything grey").
+static Int_t DistinctColor(int i) {
+    const double golden = 0.6180339887498949;
+    const double h = std::fmod(0.139 + static_cast<double>(i) * golden, 1.0);
+    const double s = 0.72, l = 0.46;
+    auto hue2rgb = [](double p, double q, double t) {
+        if (t < 0.0) t += 1.0;
+        if (t > 1.0) t -= 1.0;
+        if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+        if (t < 1.0 / 2.0) return q;
+        if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+        return p;
     };
-    const int n = static_cast<int>(sizeof(pal) / sizeof(pal[0]));
-    return pal[((i % n) + n) % n];
+    const double q = (l < 0.5) ? l * (1.0 + s) : l + s - l * s;
+    const double p = 2.0 * l - q;
+    const int r = static_cast<int>(std::lround(255.0 * hue2rgb(p, q, h + 1.0 / 3.0)));
+    const int g = static_cast<int>(std::lround(255.0 * hue2rgb(p, q, h)));
+    const int b = static_cast<int>(std::lround(255.0 * hue2rgb(p, q, h - 1.0 / 3.0)));
+    return TColor::GetColor(r, g, b);
 }
 
 // Compact a verbose scenario label so crowded comparison legends stay legible.
@@ -572,6 +582,24 @@ static void DrawColumnLegend(TPad* pad,
         leg->AddEntry(objs[i], labels[i].c_str(), opts[i].c_str());
     }
     leg->Draw();
+}
+
+// Place a (single or multi-column) legend in the right margin, i.e. completely
+// outside the data frame, so it can never occlude curves or bars. The caller has
+// already widened the pad right margin to `rightMargin`.
+static void DrawLegendOutsideRight(TPad* pad,
+                                   const std::vector<TObject*>& objs,
+                                   const std::vector<std::string>& labels,
+                                   const std::vector<std::string>& opts,
+                                   double rightMargin, double textSize, int nColumns = 1) {
+    if (objs.empty()) return;
+    const int nCols = std::max(1, nColumns);
+    const int rows = static_cast<int>((objs.size() + nCols - 1) / nCols);
+    const double rowH = std::min(0.055, 0.86 / std::max(rows, 1));
+    const double top  = 0.90;
+    const double bot  = std::max(0.10, top - rows * rowH);
+    DrawColumnLegend(pad, objs, labels, opts,
+                     1.0 - rightMargin + 0.015, bot, 0.992, top, textSize, nCols);
 }
 
 static TH1D* CloneHistStrict(TFile* f, const char* name, const std::string& tag) {
@@ -1093,20 +1121,12 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
                   return (a.second.first + a.second.second) > (b.second.first + b.second.second);
               });
     const int n = static_cast<int>(vec.size());
-    if (n == 0) return;
+    if (n < 2) return;  // a single element is not a meaningful breakdown
 
     auto toDose = [&](double edepMeV) { return d.hasMass ? EdepMeVToGy(edepMeV, d.targetMassKg) * scale
                                                          : edepMeV * scale; };
 
-    auto elemColor = [](int z) -> Int_t {
-        switch (z) {
-            case 1: return kBlue + 1;    case 2: return kRed + 1;
-            case 3: return kGreen + 2;   case 4: return kOrange + 7;
-            case 5: return kMagenta + 1; case 6: return kCyan + 2;
-            case 7: return kViolet + 1;  case 8: return kTeal + 2;
-            default: return kGray + 2;
-        }
-    };
+    auto elemColor = [](int z) -> Int_t { return DistinctColor(z); };
 
     // Frame for axes/bins; the bars are drawn per element so each element has a
     // distinct colour (previously all elements shared the same two colours).
@@ -1114,14 +1134,14 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     double maxVal = 0.0;
     for (int i = 0; i < n; ++i) {
         maxVal = std::max(maxVal, toDose(vec[i].second.first + vec[i].second.second));
-        hF->GetXaxis()->SetBinLabel(i + 1, Form("%s (Z=%d)", symbol(vec[i].first), vec[i].first));
+        hF->GetXaxis()->SetBinLabel(i + 1, symbol(vec[i].first));
     }
     if (maxVal <= 0.0) { delete hF; return; }
 
     auto* c = new TCanvas(Form("c_frag_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(),
                           ac.canvasWidth, ac.canvasHeight);
     auto* p = new TPad("p", "", 0, 0, 1, 1);
-    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(0.30);
     p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(0.22);
     p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
@@ -1138,13 +1158,10 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     // Stacked solid segments: direct deposit at the bottom (element colour), the
     // delta-ray part as a cap on top (uniform contrasting grey). Solid fills are
     // used on purpose: ROOT's SVG backend does not preserve hatched fills, which
-    // previously made the delta-ray contribution invisible.
+    // previously made the delta-ray contribution invisible. The legend lives in
+    // the right margin (outside the frame) so it never covers the bars.
     const Int_t deltaCol = kGray + 1;
-    const int nCols = (n > 7) ? 2 : 1;
-    auto* leg = new TLegend(nCols == 2 ? 0.52 : 0.56, 0.30, 0.93, 0.90);
-    leg->SetBorderSize(0); leg->SetTextSize(0.026);
-    leg->SetEntrySeparation(0.15);
-    if (nCols > 1) leg->SetNColumns(nCols);
+    std::vector<TObject*> legObjs; std::vector<std::string> legLabs;
     for (int i = 0; i < n; ++i) {
         const int Z = vec[i].first;
         const double dv = toDose(vec[i].second.first);
@@ -1166,13 +1183,14 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
         hleg->SetFillColor(col); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
-        leg->AddEntry(hleg, Form("%s (Z=%d)", symbol(Z), Z), "f");
+        legObjs.push_back(hleg); legLabs.push_back(Form("%s (Z=%d)", symbol(Z), Z));
     }
     // Explicit delta-ray key so the top cap is unambiguous in the legend.
     auto* hDelta = new TH1D(Form("hFragDelta_%s", d.cfg.tag.c_str()), "", 1, 0, 1);
     hDelta->SetFillColor(deltaCol); hDelta->SetFillStyle(1001); hDelta->SetLineColor(kBlack);
-    leg->AddEntry(hDelta, "#delta-rays (top cap)", "f");
-    leg->Draw();
+    legObjs.push_back(hDelta); legLabs.push_back("#delta-rays (top cap)");
+    std::vector<std::string> legOpts(legObjs.size(), "f");
+    DrawLegendOutsideRight(p, legObjs, legLabs, legOpts, 0.30, 0.024, 1);
     DrawHeaderBanner(p, Form("#bf{Fragment energy deposition by element}  |  %s",
                              d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
@@ -1217,7 +1235,7 @@ static void PlotSingleEdepEventDist(const ScenarioData& d, const AnalysisConfig&
     const auto& vTot = d.hitEdepByFam[static_cast<size_t>(FamilyIdx::Total)];
     const auto& vEM  = d.hitEdepByFam[static_cast<size_t>(FamilyIdx::PrimaryEM)];
     const auto& vHad = d.hitEdepByFam[static_cast<size_t>(FamilyIdx::HadTotal)];
-    if (!ac.plotEdepEventDist.enabled || vTot.empty() || d.nEvents <= 0) return;
+    if (!ac.plotEdepEventDist.enabled || vTot.empty() || vHad.empty() || d.nEvents <= 0) return;  // need a hadronic component
 
     const auto& pc = ac.plotEdepEventDist;
     double eMin = std::numeric_limits<double>::max(), eMax = 0.0;
@@ -1327,14 +1345,14 @@ static void PlotSingleEdepBySpecies(const ScenarioData& d, const AnalysisConfig&
         UpdateBoundsFromHist(h, true, xMinD, xMaxD, yMinPos, yMaxD);
         hists.emplace_back(&sc, h);
     }
-    if (hists.empty() || yMaxD <= 0.0) return;
+    if (hists.size() < 2 || yMaxD <= 0.0) return;  // skip trivial single-component spectra
 
     const double yMin = pc.autoRange ? std::pow(10.0, std::floor(std::log10(yMinPos)) - 0.3) : pc.yMin;
     const double yMax = pc.autoRange ? std::pow(10.0, std::ceil(std::log10(yMaxD)) + 0.6)    : pc.yMax;
 
     auto* c = new TCanvas(Form("c_edep_sp_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(), ac.canvasWidth, ac.canvasHeight);
     auto* p = new TPad("p", "", 0, 0, 1, 1);
-    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(0.30);
     p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(ac.bottomMargin);
     p->SetLogx(pc.logX); p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
@@ -1359,7 +1377,7 @@ static void PlotSingleEdepBySpecies(const ScenarioData& d, const AnalysisConfig&
         objs.push_back(g); labs.push_back(pair.first->label); opts.push_back("l");
     }
 
-    DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+    DrawLegendOutsideRight(p, objs, labs, opts, 0.30, pc.textSize, 1);
     DrawHeaderBanner(p, Form("#bf{%s}  |  %s", pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis();
     c->Update();
@@ -1383,15 +1401,7 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
         static const char* s[] = {"n","H","He","Li","Be","B","C","N","O","F","Ne"};
         return (z >= 0 && z <= 10) ? s[z] : "?";
     };
-    auto elemColor = [](int z) -> Int_t {
-        switch (z) {
-            case 1: return kBlue + 1;   case 2: return kRed + 1;
-            case 3: return kGreen + 2;  case 4: return kOrange + 7;
-            case 5: return kMagenta + 1;case 6: return kCyan + 2;
-            case 7: return kViolet + 1; case 8: return kTeal + 2;
-            default: return kGray + 2;
-        }
-    };
+    auto elemColor = [](int z) -> Int_t { return DistinctColor(z); };
 
     // Per component: TOTAL deposit (solid) and its SECONDARY/delta-ray part
     // (dashed); the primary-particle part is the difference of the two.
@@ -1405,7 +1415,7 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
         if (!ctot && !cdel) continue;
         comps.push_back({std::string(symbol(Z)) + " (total/#delta)", elemColor(Z), ctot, cdel});
     }
-    if (comps.size() < 2) return;
+    if (comps.size() < 3) return;  // need primary + >=2 elements
 
     double eMin = std::numeric_limits<double>::max(), eMax = 0.0;
     for (const auto& c : comps)
@@ -1436,7 +1446,7 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
 
     auto* c = new TCanvas(Form("c_edep_dd_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(), ac.canvasWidth, ac.canvasHeight);
     auto* p = new TPad("p", "", 0, 0, 1, 1);
-    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(0.30);
     p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(ac.bottomMargin);
     p->SetLogx(pc.logX); p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
@@ -1461,7 +1471,7 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
         g->Draw("L SAME");
         if (seen.insert(cu.c->label).second) { objs.push_back(g); labs.push_back(cu.c->label); opts.push_back("l"); }
     }
-    DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+    DrawLegendOutsideRight(p, objs, labs, opts, 0.30, pc.textSize, 1);
     DrawHeaderBanner(p, Form("#bf{Total (solid) vs #delta-rays (dashed)}  |  %s",
                              d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
@@ -1674,7 +1684,7 @@ static void PlotSingleFragmentCounts(const ScenarioData& d, const AnalysisConfig
 }
 
 static void PlotSingleICSD(const ScenarioData& d, const AnalysisConfig& ac, TDirectory* outDir) {
-    if (ac.plotICSD.enabled && d.hIcsdTargetTot && d.hIcsdTargetTot->Integral() > 0.0) {
+    if (ac.plotICSD.enabled && d.hIcsdTargetTot && d.hIcsdTargetTot->Integral() > 0.0 && d.hIcsdTargetHad && d.hIcsdTargetHad->Integral() > 0.0) {  // skip single-component (no-hadronic)
         const auto& pc = ac.plotICSD;
 
         auto* hTot = static_cast<TH1D*>(d.hIcsdTargetTot->Clone(Form("hIcsdTot_%s", d.cfg.tag.c_str())));
@@ -1749,7 +1759,7 @@ static void PlotSingleICSD(const ScenarioData& d, const AnalysisConfig& ac, TDir
     }
 
     // Полный диапазон ICSD по событиям прямо из BioData (без обрезки на 10 000)
-    if (ac.plotICSDFull.enabled && !d.hitIonsTot.empty() && d.nEvents > 0) {
+    if (ac.plotICSDFull.enabled && !d.hitIonsTot.empty() && !d.hitIonsHad.empty() && d.nEvents > 0) {  // skip single-component
         const auto& pc = ac.plotICSDFull;
         int maxI = 1;
         for (int v : d.hitIonsTot) maxI = std::max(maxI, v);
@@ -1862,7 +1872,7 @@ static void PlotSingleSpectraAndKinematics(const ScenarioData& d, const Analysis
 
         auto* c = new TCanvas(Form("c_spec_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(), ac.canvasWidth, ac.canvasHeight);
         auto* p = new TPad("p", "", 0, 0, 1, 1);
-        p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+        p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(0.30);
         p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(ac.bottomMargin);
         p->SetLogx(pc.logX); p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
         p->Draw(); p->cd();
@@ -1887,7 +1897,7 @@ static void PlotSingleSpectraAndKinematics(const ScenarioData& d, const Analysis
             objs.push_back(g); labs.push_back(pair.first->label); opts.push_back("l");
         }
 
-        DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+        DrawLegendOutsideRight(p, objs, labs, opts, 0.30, pc.textSize, 1);
         DrawHeaderBanner(p, Form("#bf{%s}  |  %s", pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
         p->RedrawAxis();
         c->Update();
@@ -1929,7 +1939,7 @@ static void PlotSingleSpectraAndKinematics(const ScenarioData& d, const Analysis
 
             auto* c = new TCanvas(Form("c_kin_%s", d.cfg.tag.c_str()), pc.titlePrefix.c_str(), ac.canvasWidth, ac.canvasHeight);
             auto* p = new TPad("p", "", 0, 0, 1, 1);
-            p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+            p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(0.30);
             p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(ac.bottomMargin);
             p->SetLogx(pc.logX); p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
             p->Draw(); p->cd();
@@ -1952,7 +1962,7 @@ static void PlotSingleSpectraAndKinematics(const ScenarioData& d, const Analysis
                 objs.push_back(g); labs.push_back(kc.label); opts.push_back("l");
             }
 
-            DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+            DrawLegendOutsideRight(p, objs, labs, opts, 0.30, pc.textSize, 1);
             DrawHeaderBanner(p, Form("#bf{%s}  |  %s", pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
             p->RedrawAxis();
             c->Update();
@@ -2155,7 +2165,7 @@ static void PlotCompareGroupedBars(const std::vector<ScenarioData>& all, const A
 
     auto* c = new TCanvas(Form("c_cmp_%s", isDoseMode ? "dose" : "frag"), pc.titlePrefix.c_str(), ac.canvasWidth, ac.canvasHeight);
     auto* p = new TPad("p", "", 0, 0, 1, 1);
-    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(ac.rightMargin);
+    p->SetLeftMargin(ac.leftMargin); p->SetRightMargin(0.26);
     p->SetTopMargin(ac.topMargin);   p->SetBottomMargin(0.18);
     p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
@@ -2175,7 +2185,7 @@ static void PlotCompareGroupedBars(const std::vector<ScenarioData>& all, const A
         hists[s]->GetYaxis()->SetTitleSize(0.042); hists[s]->GetYaxis()->SetTitleOffset(1.10);
         hists[s]->GetYaxis()->SetLabelSize(0.036); hists[s]->GetYaxis()->CenterTitle(true);
 
-        hists[s]->SetFillColor(DistinctColorByIndex(s));
+        hists[s]->SetFillColor(DistinctColor(s));
         hists[s]->SetFillStyle(1001);
         hists[s]->SetLineColor(kBlack);
         hists[s]->SetLineWidth(1);
@@ -2186,7 +2196,7 @@ static void PlotCompareGroupedBars(const std::vector<ScenarioData>& all, const A
         objs.push_back(hists[s]); labs.push_back(ShortLegendLabel(all[s].cfg.legendLabel)); opts.push_back("f");
     }
 
-    DrawColumnLegend(p, objs, labs, opts, 0.30, 0.58, 0.99, 0.90, 0.021, nS > 8 ? 3 : 2);
+    DrawLegendOutsideRight(p, objs, labs, opts, 0.26, 0.019, 1);
     DrawHeaderBanner(p, Form("#bf{%s}", pc.titlePrefix.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis();
     c->Update();
@@ -2254,7 +2264,7 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
     // experimental data and is no longer wanted).
     auto* c = new TCanvas(Form("c_cmp_%s", outName.c_str()), outName.c_str(), ac.canvasWidth, ac.canvasHeight);
     auto* pad1 = new TPad("pad1", "main", 0.0, 0.0, 1.0, 1.0);
-    pad1->SetLeftMargin(ac.leftMargin); pad1->SetRightMargin(ac.rightMargin);
+    pad1->SetLeftMargin(ac.leftMargin); pad1->SetRightMargin(0.24);
     pad1->SetTopMargin(ac.topMargin);   pad1->SetBottomMargin(ac.bottomMargin);
     pad1->SetLogy(pc.logY);
     if (pc.logX) pad1->SetLogx();
@@ -2274,14 +2284,13 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
     std::vector<TObject*> objs; std::vector<std::string> labs, opts;
     for (size_t i = 0; i < hists.size(); ++i) {
         auto* g = HistToCleanGraph(hists[i], yMin * 0.1, !isICSD);
-        g->SetLineColor(DistinctColorByIndex(static_cast<int>(i)));
+        g->SetLineColor(DistinctColor(static_cast<int>(i)));
         g->SetLineStyle(cfgs[i]->lineStyle);
         g->SetLineWidth(pc.lineWidth);
         g->Draw("L SAME");
         objs.push_back(g); labs.push_back(ShortLegendLabel(cfgs[i]->legendLabel)); opts.push_back("l");
     }
-    DrawDualLegend(pad1, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize,
-                   hists.size() > 8 ? 2 : 1);
+    DrawLegendOutsideRight(pad1, objs, labs, opts, 0.24, pc.textSize, 1);
     DrawHeaderBanner(pad1, Form("#bf{%s}", pc.titlePrefix.c_str()), ac.leftMargin, 0.942, pc.textSize);
     pad1->RedrawAxis();
     c->Update();
