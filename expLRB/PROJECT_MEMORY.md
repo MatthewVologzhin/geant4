@@ -168,3 +168,55 @@ EM-прогоны **побитово идентичны** на обеих сбо
 
 **Доступ к кластеру (для агента):** `ssh -o BatchMode=yes <user>@<host>` по ключу (адрес/учётка — вне
 репозитория, не хранить). Репозиторий на кластере: `~/projects/geant4/expLRB` (remote `github`).
+
+---
+
+## 11. Производственная кампания и графики (2026-11-27) — АКТУАЛЬНОЕ СОСТОЯНИЕ
+
+**Кампания завершена** (HTCondor + SLURM, общий lustre-`/home`):
+- 16 боевых сценариев: **monolayer — 8 × 20·10⁶** событий (4·10⁶ первично + 16·10⁶ доборный батч),
+  **suspension — 8 × 1·10⁶**. Смёржены в `output/root/<scenario>.root`; `output/raw/` — 6720 чанков
+  (проверено: monolayer `entries=20e6`, suspension `1e6`). Старые 1e6-данные — в `output/{raw,root}_prev_1e6/`.
+
+**Пайплайн / инструменты:**
+- `jobs/submit.sh` — число событий берётся **из `manifest.tsv` (per-scenario)**; `EVENTS_TOTAL` — override
+  всех; `RUN_LABEL` (по умолчанию timestamp) в имени чанка → повторные прогоны **накапливают** статистику;
+  `SCHEDULER=condor|slurm`; `THREADS=10`.
+- `jobs/job_run_one.sh` — **атомарная запись чанка**: пишет во временный файл и `mv` по успеху. Временный
+  файл **обязан оканчиваться на `.root`** — иначе `G4AnalysisManager` (формат по расширению) не создаёт файл
+  и HTCondor уходит в hold «transfer output failure» (мой прошлый баг, `cc0b8b6`).
+- `scripts/merge_all.sh` — пропускает обрубки/недописанные (<10 КБ). `plot.C` — графики.
+- `jobs/monitor_all.py` — сводный монитор HTCondor+SLURM+полные чанки (addresses через env `CONDOR_SSH`/
+  `SLURM_SSH`, вне репозитория).
+
+**SLURM:** доступен через отдельный логин-хост (ОС Ubuntu, адрес/порт — у админа, вне репозитория);
+**общий `/home`** с HTCondor → репозиторий и Geant4 видны. ~39 узлов / ~1836 CPU. `submit.sh` запускать
+там, где есть `sbatch`; `JOB_RUNNER` — абсолютный путь к `job_run_one.sh` (SLURM копирует скрипт в spool).
+
+**HTCondor:** ~9 живых узлов по 48 CPU; **wrk1/wrk12 не монтируют `/home`** → исключены в `htcondor.sub.in`
+(`requirements`). Задачи просят 10 CPU → 4 задачи/узел (8 CPU «в отход»), поэтому параллелизм ~36.
+
+**Фильтрованные сценарии (`*_filt_*`) — ВАЖНО:** фильтр стоит **специально**, чтобы **остановить пучок**
+(20Ne 1 ГэВ = 50 МэВ/нуклон) в последнем фильтре; сигнал — **долетевшие до мишени вторичные фрагменты**.
+Поэтому `Edep_PrimaryIonDirect ≈ 0` и малый полный депозит в `*_filt_*` — **ОЖИДАЕМО, не баг**.
+
+**Фрагменты:** append-only векторные ветки `BioData` — `Frag_Z/Frag_A/Frag_Edep/Frag_EdepDelta/Frag_Ions`
+(группа скоринга `fragments`, включена в `standard`/`full`); `BioTrackInformation` несёт (Z,A), δ-электроны
+наследуют (Z,A) родителя.
+
+**plot.C — текущее состояние (коммиты `7ebe283`,`456601d`,`63ff5f3`,`cc0b8b6`):**
+- `Edep_ByFragment_<scen>` — по элементу Z, direct (solid) / δ (hatched), **цвет на элемент**.
+- `Edep_BySpecies_DirectDelta_<scen>` — сплошная = **ПОЛНАЯ**, штриховая = **ВТОРИЧНАЯ (δ)**; первичная =
+  разность. Проверено: δ ≤ total всегда (0 нарушений), одинаковые лог-бины, один вес `1/N_events`.
+- `HadronVertexZ_<scen>` + `Compare_HadronVertexZ` — z рождения адронных вершин.
+- `Compare_*` — одиночный пад (ratio-pad2 убран).
+- Убраны: `Edep_BySpecies_Linear`, `AllSpectra_Grid3x3`, `HeavyPerNucl`, `SpecIn_Heavy`, прогоны `test_*`.
+- Графики (SVG, 147 шт.) — на WSL2 в `output/plots/analysis/`.
+
+**ОТКРЫТО (следующая сессия — КАЧЕСТВО ГРАФИКОВ):**
+1. `Edep_ByFragment`: плохо виден hatched-вклад δ-электронов (нужен контрастный hatch/цвет).
+2. Возможные совпадения цветов у двух элементов и наложения текста/легенд.
+3. Для визуальной ревизии нужен **vision-агент** — текущая модель (deepseek-v4.1-flash) изображения НЕ
+   читает («Cannot read image»). PNG готовить: `convert -density 120 "$f.svg" -flatten "$f.png"`. Доступны
+   vision-модели Claude (Sonnet/Opus/Fable) и Gemini 3.x — запускать ревизию под ними
+   (переключить модель или поднять сессию Agent Manager с vision-моделью на папку PNG).

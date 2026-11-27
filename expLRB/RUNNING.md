@@ -321,3 +321,32 @@ scripts/build.sh               # переконфигурирует CMake, пе�
 7. `scripts/build.sh`; проверьте, что `standard` даёт прежнее дерево, а `full` — с новым.
 
 Профиль `standard` обязан сохранять колонки 0..34 (`plot.C` и старые данные на них опираются).
+
+## 9. Графики: инвентарь и типичные проблемы
+
+Всё делает `plot.C` (ACLiC): `root -l -q 'plot.C+'` → SVG в `output/plots/analysis/` (+
+`lrb_analysis_results.root`, `lrb_dosimetric_audit.csv`). Сценарии — из `config/plot_scenarios.inc`,
+косметика — `config/analysis.conf`. Прогоны `test_*` пропускаются.
+
+**Основные типы графиков**
+- `DoseShare_*`, `Dose_BySpecies_*` — доля/величина дозы по семействам.
+- `Edep_Distribution_*`, `Edep_BySpecies_*` (лог) — dN/dlnE энерговыделения за событие.
+- `Edep_BySpecies_DirectDelta_*` — по элементу: **solid = полная, dashed = вторичная (δ)**; первичная = разность.
+- `Edep_BySubChannel_*` — вклад подканалов (первичный ион / его δ / фрагменты / δ фрагментов).
+- `Edep_ByFragment_*` — по элементу Z, direct (solid) / δ (hatched).
+- `HadronVertexZ_*`, `Compare_HadronVertexZ` — z рождения адронных вершин (какой фильтр «опасен»).
+- `ICSD_*` (только для `cells`-сценариев с целью-ядром), `EntranceSpectra_*`, `Kinematics_AllSpectra_MeVu_*`,
+  `FragmentCounts_*`, `Compare_*` (одиночный пад).
+
+**Типичные проблемы / правила**
+1. **Видимость stacked-сегментов.** Для двух сегментов (direct/δ) рисуйте сначала накопленную
+   (direct+δ), затем direct сверху — иначе один сегмент перекрывает другой. Для hatch задавайте
+   контрастный цвет штриха.
+2. **Цвета.** Разные элементы должны иметь различимые цвета (палитра в `Edep_ByFragment`/`DirectDelta`).
+3. **autoRange.** Для фиксированных окон (`plotEdepBySpeciesLinear` и т.п.) при малых Edep данные
+   «прилипают» к краю — используйте autoRange/данные-зависимое окно.
+4. **Производительность/счёт чанков.** Не-дописанные чанки — обрубки; `merge_all.sh`/`monitor_all.py`
+   их игнорируют. Кампания не считается «готовой», пока `DONE < target` по сценарию.
+5. **Визуальная ревизия.** Текущая модель-агент изображения не читает. Для ревизии: конвертируйте SVG в
+   PNG (`convert -density 120 x.svg -flatten x.png`) и запускайте просмотр под **vision-моделью**
+   (Claude Sonnet/Opus, Gemini 3.x).
