@@ -130,7 +130,7 @@ struct AnalysisConfig {
         "Energy Deposition by Particle Family",
         "Energy deposited in target per event, E_{dep} [MeV]",
         "dN / d(ln E_{dep}) per primary",
-        "", 0.14, 0.45, 0.45, 0.88, 2.0, 0.030
+        "", 0.14, 0.34, 0.45, 0.88, 2.0, 0.030
     };
 
     PlotConfig plotEdepBySpeciesLinear {
@@ -170,7 +170,7 @@ struct AnalysisConfig {
         "Entrance Kinetic Energy Spectra",
         "Kinetic energy at target entrance, E_{kin} [MeV]",
         "dN / d(ln E) per primary",
-        "Ratio to Ref", 0.14, 0.48, 0.46, 0.88, 2.0, 0.030
+        "Ratio to Ref", 0.14, 0.36, 0.46, 0.88, 2.0, 0.030
     };
 
     PlotConfig plotKinematicsMeVu {
@@ -178,7 +178,7 @@ struct AnalysisConfig {
         "Product Kinematics (All Entrance Spectra in E_{kin}/A)",
         "Kinetic energy per nucleon at entrance, E_{kin}/A [MeV/u]",
         "dN / d(ln(E/A)) per primary",
-        "", 0.14, 0.52, 0.46, 0.88, 2.2, 0.030
+        "", 0.14, 0.38, 0.46, 0.88, 2.2, 0.030
     };
 
     PlotConfig plotSpectraGrid {
@@ -211,6 +211,16 @@ struct AnalysisConfig {
         "Secondary fragment family",
         "Target entrances per 10^{6} primaries",
         "", 0.50, 0.68, 0.92, 0.88, 1.5, 0.030
+    };
+
+    // HadronVertexZ comparison needs its own axes/units: the overlay must be in
+    // z [mm], not the entrance-spectra E_kin axis it used to borrow.
+    PlotConfig plotCompareHVZ {
+        true, true, false, true, 0, 30, 1.0, 1e7, 0.0, 2.5, 1,
+        "Hadronic Vertex Z Comparison",
+        "z [mm]",
+        "Hadronic vertices per 10^{6} primaries",
+        "", 0.52, 0.66, 0.93, 0.88, 1.8, 0.026
     };
 };
 
@@ -465,7 +475,8 @@ static void DrawDualLegend(TPad* pad,
                            const std::vector<TObject*>& objs,
                            const std::vector<std::string>& labels,
                            const std::vector<std::string>& opts,
-                           double x1, double y1, double x2, double y2, double textSize) {
+                           double x1, double y1, double x2, double y2, double textSize,
+                           int nColumns = 1) {
     if (objs.empty()) return;
     pad->cd();
     const double iconWidth = 0.050;
@@ -478,12 +489,14 @@ static void DrawDualLegend(TPad* pad,
     legText->SetTextAlign(32);
     legText->SetMargin(0.0);
     legText->SetEntrySeparation(0.40);
+    if (nColumns > 1) legText->SetNColumns(nColumns);
 
     auto* legIcons = new TLegend(x2 - iconWidth, y1, x2, y2);
     legIcons->SetBorderSize(0);
     legIcons->SetFillStyle(0);
     legIcons->SetMargin(1.0);
     legIcons->SetEntrySeparation(0.40);
+    if (nColumns > 1) legIcons->SetNColumns(nColumns);
 
     for (size_t i = 0; i < objs.size(); ++i) {
         std::string fmtLabel = Form("#scale[0.9]{#bf{%s}}", labels[i].c_str());
@@ -503,6 +516,62 @@ static void DrawHeaderBanner(TPad* pad, const std::string& text, double xLeft, d
     tex.SetTextAlign(12);
     tex.SetTextSize(size);
     tex.DrawLatex(xLeft, yTop, text.c_str());
+}
+
+// Distinct per-scenario colour assigned by position, so comparison overlays that
+// would otherwise reuse the auto-generated palette (monolayer/suspension share
+// colours) stay readable.
+static Int_t DistinctColorByIndex(int i) {
+    static const Int_t pal[] = {
+        kBlue + 1,   kRed + 1,     kGreen + 2,  kOrange + 7, kMagenta + 1,
+        kCyan + 2,   kViolet + 1,  kTeal + 2,   kPink + 1,   kAzure + 1,
+        kSpring + 3, kViolet + 6,  kOrange - 3, kGreen + 3,  kRed - 4, kBlue - 7
+    };
+    const int n = static_cast<int>(sizeof(pal) / sizeof(pal[0]));
+    return pal[((i % n) + n) % n];
+}
+
+// Compact a verbose scenario label so crowded comparison legends stay legible.
+static std::string ShortLegendLabel(const std::string& s) {
+    std::string r = s;
+    auto rep = [&](const std::string& a, const std::string& b) {
+        for (size_t p = r.find(a); p != std::string::npos; p = r.find(a, p + b.size())) {
+            r.replace(p, a.size(), b);
+        }
+    };
+    rep("no hadronic", "nohad");
+    rep("no filter",   "nF");
+    rep("no cells",    "nC");
+    rep("Monolayer",   "ML");
+    rep("Suspension",  "Susp");
+    rep("hadronic",    "had");
+    rep("filter",      "F");
+    rep("cells",       "C");
+    for (size_t p = r.find(", "); p != std::string::npos; p = r.find(", ", p)) r.replace(p, 2, " ");
+    return r;
+}
+
+// Single multi-column legend (icon + label together). Used where many entries
+// (comparison overlays/bars) would otherwise overflow a one-column legend box.
+static void DrawColumnLegend(TPad* pad,
+                             const std::vector<TObject*>& objs,
+                             const std::vector<std::string>& labels,
+                             const std::vector<std::string>& opts,
+                             double x1, double y1, double x2, double y2,
+                             double textSize, int nColumns) {
+    if (objs.empty()) return;
+    pad->cd();
+    auto* leg = new TLegend(x1, y1, x2, y2);
+    leg->SetBorderSize(1);
+    leg->SetFillStyle(1001);
+    leg->SetFillColor(kWhite);
+    leg->SetTextSize(textSize);
+    leg->SetEntrySeparation(0.10);
+    if (nColumns > 1) leg->SetNColumns(nColumns);
+    for (size_t i = 0; i < objs.size(); ++i) {
+        leg->AddEntry(objs[i], labels[i].c_str(), opts[i].c_str());
+    }
+    leg->Draw();
 }
 
 static TH1D* CloneHistStrict(TFile* f, const char* name, const std::string& tag) {
@@ -869,8 +938,8 @@ static void PlotSingleDoseBars(const ScenarioData& d, const AnalysisConfig& ac, 
             hDose->GetYaxis()->SetTitleOffset(1.12);
             hDose->GetYaxis()->SetLabelSize(0.036);
             hDose->GetYaxis()->CenterTitle(true);
-            hDose->SetFillColor(d.cfg.color); hDose->SetFillStyle(3004);
-            hDose->SetLineColor(d.cfg.color); hDose->SetLineWidth(2);
+            hDose->SetFillColor(d.cfg.color); hDose->SetFillStyle(1001);
+            hDose->SetLineColor(kBlack); hDose->SetLineWidth(2);
             hDose->SetBarWidth(0.75); hDose->SetBarOffset(0.125);
             hDose->Draw("BAR1");
 
@@ -915,8 +984,8 @@ static void PlotSingleDoseBars(const ScenarioData& d, const AnalysisConfig& ac, 
         hShare->GetYaxis()->SetTitleOffset(1.05);
         hShare->GetYaxis()->SetLabelSize(0.036);
         hShare->GetYaxis()->CenterTitle(true);
-        hShare->SetFillColor(kTeal + 1); hShare->SetFillStyle(3005);
-        hShare->SetLineColor(kTeal + 2); hShare->SetLineWidth(2);
+        hShare->SetFillColor(kTeal + 1); hShare->SetFillStyle(1001);
+        hShare->SetLineColor(kBlack); hShare->SetLineWidth(2);
         hShare->SetBarWidth(0.75); hShare->SetBarOffset(0.125);
         hShare->Draw("BAR1");
 
@@ -977,8 +1046,8 @@ static void PlotSingleSubChannels(const ScenarioData& d, const AnalysisConfig& a
         h->GetYaxis()->SetTitleOffset(1.12);
         h->GetYaxis()->SetLabelSize(0.036);
         h->GetYaxis()->CenterTitle(true);
-        h->SetFillColor(d.cfg.color); h->SetFillStyle(3004);
-        h->SetLineColor(d.cfg.color); h->SetLineWidth(2);
+        h->SetFillColor(d.cfg.color); h->SetFillStyle(1001);
+        h->SetLineColor(kBlack); h->SetLineWidth(2);
         h->SetBarWidth(0.75); h->SetBarOffset(0.125);
         h->Draw("BAR1");
 
@@ -1066,34 +1135,46 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     hF->SetStats(0);
     hF->Draw("AXIS");
 
-    auto* leg = new TLegend(0.44, 0.74, 0.90, 0.89);
-    leg->SetBorderSize(0); leg->SetTextSize(0.027);
+    // Stacked solid segments: direct deposit at the bottom (element colour), the
+    // delta-ray part as a cap on top (uniform contrasting grey). Solid fills are
+    // used on purpose: ROOT's SVG backend does not preserve hatched fills, which
+    // previously made the delta-ray contribution invisible.
+    const Int_t deltaCol = kGray + 1;
+    const int nCols = (n > 7) ? 2 : 1;
+    auto* leg = new TLegend(nCols == 2 ? 0.52 : 0.56, 0.30, 0.93, 0.90);
+    leg->SetBorderSize(0); leg->SetTextSize(0.026);
+    leg->SetEntrySeparation(0.15);
+    if (nCols > 1) leg->SetNColumns(nCols);
     for (int i = 0; i < n; ++i) {
         const int Z = vec[i].first;
         const double dv = toDose(vec[i].second.first);
         const double lv = toDose(vec[i].second.second);
         const Int_t col = elemColor(Z);
-        // delta-rays: draw cumulative (direct+delta) with a hatch pattern ...
+        // cumulative (direct + delta) first: full bar drawn in the delta shade ...
         if (lv > 0.0) {
             auto* hb = new TH1D(Form("hFragD_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
             hb->SetBinContent(1, dv + lv);
-            hb->SetFillColor(col); hb->SetFillStyle(3004); hb->SetLineColor(col);
+            hb->SetFillColor(deltaCol); hb->SetFillStyle(1001); hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR1 SAME");
         }
-        // ... then the direct part solid on top, so both segments stay visible.
+        // ... then the direct part solid on top, so the visible cap = delta-rays.
         if (dv > 0.0) {
             auto* hb = new TH1D(Form("hFragB_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
             hb->SetBinContent(1, dv);
-            hb->SetFillColor(col); hb->SetFillStyle(1001); hb->SetLineColor(col);
+            hb->SetFillColor(col); hb->SetFillStyle(1001); hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR1 SAME");
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
-        hleg->SetFillColor(col); hleg->SetFillStyle(1001);
+        hleg->SetFillColor(col); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
         leg->AddEntry(hleg, Form("%s (Z=%d)", symbol(Z), Z), "f");
     }
+    // Explicit delta-ray key so the top cap is unambiguous in the legend.
+    auto* hDelta = new TH1D(Form("hFragDelta_%s", d.cfg.tag.c_str()), "", 1, 0, 1);
+    hDelta->SetFillColor(deltaCol); hDelta->SetFillStyle(1001); hDelta->SetLineColor(kBlack);
+    leg->AddEntry(hDelta, "#delta-rays (top cap)", "f");
     leg->Draw();
-    DrawHeaderBanner(p, Form("#bf{%s  [solid = direct, hatched = #delta-rays]}  |  %s",
-                             pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
+    DrawHeaderBanner(p, Form("#bf{Fragment energy deposition by element}  |  %s",
+                             d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
     std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_ByFragment_" + d.cfg.tag) << "\n";
     delete c;
@@ -1107,6 +1188,7 @@ static void PlotSingleHadronVertexZ(const ScenarioData& d, const AnalysisConfig&
     const auto& pc = ac.plotSpectra;
     auto* h = static_cast<TH1D*>(d.hHadronVertexZ->Clone(Form("hHvz_%s", d.cfg.tag.c_str())));
     h->SetDirectory(nullptr);
+    h->SetTitle("");  // drop the ROOT auto-title so it cannot collide with the header banner
     if (pc.rebin > 1) h->Rebin(pc.rebin);
     h->Scale(ac.normPrimaries / static_cast<double>(d.nEvents));
 
@@ -1118,7 +1200,7 @@ static void PlotSingleHadronVertexZ(const ScenarioData& d, const AnalysisConfig&
     p->SetLogy(pc.logY); p->SetTickx(1); p->SetTicky(1);
     p->Draw(); p->cd();
     h->SetLineColor(d.cfg.color); h->SetLineWidth(2);
-    h->SetFillColor(d.cfg.color); h->SetFillStyle(3004);
+    h->SetFillColor(d.cfg.color); h->SetFillStyle(1001);
     h->GetXaxis()->SetTitle("z [mm]");
     h->GetYaxis()->SetTitle(Form("Hadronic vertices per %s", ac.normLabel.c_str()));
     h->GetYaxis()->SetTitleSize(0.042); h->GetYaxis()->SetTitleOffset(1.15);
@@ -1380,8 +1462,8 @@ static void PlotSingleEdepDirectDelta(const ScenarioData& d, const AnalysisConfi
         if (seen.insert(cu.c->label).second) { objs.push_back(g); labs.push_back(cu.c->label); opts.push_back("l"); }
     }
     DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
-    DrawHeaderBanner(p, Form("#bf{%s  [solid = total, dashed = secondary (#delta-rays)]}  |  %s",
-                             pc.titlePrefix.c_str(), d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
+    DrawHeaderBanner(p, Form("#bf{Total (solid) vs #delta-rays (dashed)}  |  %s",
+                             d.cfg.legendLabel.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis(); c->Update();
     std::cout << "  [Saved] " << SavePlot(c, ac, "Edep_BySpecies_DirectDelta_" + d.cfg.tag) << "\n";
     delete c;
@@ -2093,18 +2175,18 @@ static void PlotCompareGroupedBars(const std::vector<ScenarioData>& all, const A
         hists[s]->GetYaxis()->SetTitleSize(0.042); hists[s]->GetYaxis()->SetTitleOffset(1.10);
         hists[s]->GetYaxis()->SetLabelSize(0.036); hists[s]->GetYaxis()->CenterTitle(true);
 
-        hists[s]->SetFillColor(all[s].cfg.color);
-        hists[s]->SetFillStyle(3004 + (s % 4));
-        hists[s]->SetLineColor(all[s].cfg.color);
-        hists[s]->SetLineWidth(2);
+        hists[s]->SetFillColor(DistinctColorByIndex(s));
+        hists[s]->SetFillStyle(1001);
+        hists[s]->SetLineColor(kBlack);
+        hists[s]->SetLineWidth(1);
         hists[s]->SetBarWidth(bw * 0.92);
         hists[s]->SetBarOffset(0.10 + s * bw);
         hists[s]->Draw(s == 0 ? "BAR1" : "BAR1 SAME");
 
-        objs.push_back(hists[s]); labs.push_back(all[s].cfg.legendLabel); opts.push_back("f");
+        objs.push_back(hists[s]); labs.push_back(ShortLegendLabel(all[s].cfg.legendLabel)); opts.push_back("f");
     }
 
-    DrawDualLegend(p, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+    DrawColumnLegend(p, objs, labs, opts, 0.30, 0.58, 0.99, 0.90, 0.021, nS > 8 ? 3 : 2);
     DrawHeaderBanner(p, Form("#bf{%s}", pc.titlePrefix.c_str()), ac.leftMargin, 0.942, pc.textSize);
     p->RedrawAxis();
     c->Update();
@@ -2192,13 +2274,14 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
     std::vector<TObject*> objs; std::vector<std::string> labs, opts;
     for (size_t i = 0; i < hists.size(); ++i) {
         auto* g = HistToCleanGraph(hists[i], yMin * 0.1, !isICSD);
-        g->SetLineColor(cfgs[i]->color);
+        g->SetLineColor(DistinctColorByIndex(static_cast<int>(i)));
         g->SetLineStyle(cfgs[i]->lineStyle);
         g->SetLineWidth(pc.lineWidth);
         g->Draw("L SAME");
-        objs.push_back(g); labs.push_back(cfgs[i]->legendLabel); opts.push_back("l");
+        objs.push_back(g); labs.push_back(ShortLegendLabel(cfgs[i]->legendLabel)); opts.push_back("l");
     }
-    DrawDualLegend(pad1, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize);
+    DrawDualLegend(pad1, objs, labs, opts, pc.legX1, pc.legY1, pc.legX2, pc.legY2, pc.textSize,
+                   hists.size() > 8 ? 2 : 1);
     DrawHeaderBanner(pad1, Form("#bf{%s}", pc.titlePrefix.c_str()), ac.leftMargin, 0.942, pc.textSize);
     pad1->RedrawAxis();
     c->Update();
@@ -2269,7 +2352,7 @@ void analyzeLRB() {
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotICSD,    "ICSD_Target_Total", true,  "Compare_ICSD_Target_Total", cmpDir);
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "SpecIn_Proton",     false, "Compare_SpecIn_Proton",     cmpDir);
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "SpecIn_Alpha",      false, "Compare_SpecIn_Alpha",      cmpDir);
-        PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "HadronVertexZ",     false, "Compare_HadronVertexZ",     cmpDir);
+        PlotCompareOverlayWithRatio(loaded, ac, ac.plotCompareHVZ, "HadronVertexZ", false, "Compare_HadronVertexZ", cmpDir);
     }
 
     outRoot->Write();
