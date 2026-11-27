@@ -519,12 +519,16 @@ static void DrawHeaderBanner(TPad* pad, const std::string& text, double xLeft, d
 }
 
 // Categorical colour for index i, spread over the hue wheel by the golden-ratio
-// low-discrepancy sequence. Unlike a hand-rolled list this stays distinct for
-// any number of series/elements (no repeated greens or "everything grey").
+// low-discrepancy sequence, with a lightness that cycles so hues that repeat
+// after a full turn of the wheel stay distinguishable. Stays distinct for any
+// number of series/elements (no repeated greens or "everything grey").
 static Int_t DistinctColor(int i) {
     const double golden = 0.6180339887498949;
-    const double h = std::fmod(0.139 + static_cast<double>(i) * golden, 1.0);
-    const double s = 0.72, l = 0.46;
+    const double x = 0.139 + static_cast<double>(i) * golden;
+    const double h = std::fmod(x, 1.0);
+    static const double lvals[] = {0.46, 0.34, 0.58};
+    const double l = lvals[static_cast<int>(std::floor(x)) % 3];
+    const double s = 0.75;
     auto hue2rgb = [](double p, double q, double t) {
         if (t < 0.0) t += 1.0;
         if (t > 1.0) t -= 1.0;
