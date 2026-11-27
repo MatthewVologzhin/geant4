@@ -1237,21 +1237,29 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
         const int ni = static_cast<int>(isos.size());
         int kDom = 0;  // most abundant isotope, used as the legend swatch
         for (int k = 0; k < ni; ++k) if (isos[k].direct > isos[kDom].direct) kDom = k;
-        double cum = 0.0, prev = 0.0;
-        for (int k = 0; k < ni; ++k) {
-            cum += isos[k].direct;
-            const double hi = toDose(cum);
+        std::vector<double> cum(ni);
+        double acc = 0.0;
+        for (int k = 0; k < ni; ++k) { acc += isos[k].direct; cum[k] = acc; }
+        // A bar always starts at 0, so the isotope bands are revealed by drawing
+        // the tallest cumulative bar first and progressively shorter ones on top:
+        // each shorter overlay uncovers exactly one isotope band of the previous.
+        for (int k = ni - 1; k >= 0; --k) {
+            const double hi = toDose(cum[k]);
             if (hi <= 0.0) continue;
             auto* hb = new TH1D(Form("hFragI_%d_%d_%s", i, isos[k].A, d.cfg.tag.c_str()), "", 1, i, i + 1);
             hb->SetBinContent(1, hi);
             hb->SetFillColor(ShadeColor(base, k, ni)); hb->SetFillStyle(1001);
             hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
-            const double lo = toDose(prev);
-            if (ni <= 12 && (k == 0 || (lo > 0.0 && hi / lo > 1.30))) {
-                aLab.DrawLatex(i + 0.5, hi * 1.06, Form("%d", isos[k].A));
+        }
+        // mass-number labels on the isotope bands that are resolvable
+        if (ni <= 12) {
+            for (int k = 0; k < ni; ++k) {
+                const double hi = toDose(cum[k]);
+                const double lo = (k == 0) ? 0.0 : toDose(cum[k - 1]);
+                if (hi <= 0.0) continue;
+                if (k == 0 || hi / lo > 1.30) aLab.DrawLatex(i + 0.5, hi * 1.06, Form("%d", isos[k].A));
             }
-            prev = cum;
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
         hleg->SetFillColor(ShadeColor(base, kDom, ni)); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
