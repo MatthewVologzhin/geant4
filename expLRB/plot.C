@@ -1235,6 +1235,8 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
         auto isos = isoByZ[Z];
         std::sort(isos.begin(), isos.end(), [](const Iso& x, const Iso& y) { return x.A < y.A; });
         const int ni = static_cast<int>(isos.size());
+        int kDom = 0;  // most abundant isotope, used as the legend swatch
+        for (int k = 0; k < ni; ++k) if (isos[k].direct > isos[kDom].direct) kDom = k;
         double cum = 0.0, prev = 0.0;
         for (int k = 0; k < ni; ++k) {
             cum += isos[k].direct;
@@ -1246,11 +1248,13 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
             hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
             const double lo = toDose(prev);
-            if (ni <= 8 && lo > 0.0 && hi / lo > 1.30) aLab.DrawLatex(i + 0.5, hi * 1.06, Form("%d", isos[k].A));
+            if (ni <= 12 && (k == 0 || (lo > 0.0 && hi / lo > 1.30))) {
+                aLab.DrawLatex(i + 0.5, hi * 1.06, Form("%d", isos[k].A));
+            }
             prev = cum;
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
-        hleg->SetFillColor(base); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
+        hleg->SetFillColor(ShadeColor(base, kDom, ni)); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
         legObjs.push_back(hleg); legLabs.push_back(Form("%s (Z=%d)", symbol(Z), Z));
     }
     // Explicit delta-ray key so the top cap is unambiguous in the legend.
