@@ -941,7 +941,7 @@ static void PlotSingleDoseBars(const ScenarioData& d, const AnalysisConfig& ac, 
             hDose->SetFillColor(d.cfg.color); hDose->SetFillStyle(1001);
             hDose->SetLineColor(kBlack); hDose->SetLineWidth(2);
             hDose->SetBarWidth(0.75); hDose->SetBarOffset(0.125);
-            hDose->Draw("BAR1");
+            hDose->Draw("BAR");
 
             TLatex valTxt;
             valTxt.SetTextFont(42); valTxt.SetTextSize(0.023); valTxt.SetTextAlign(21);
@@ -987,7 +987,7 @@ static void PlotSingleDoseBars(const ScenarioData& d, const AnalysisConfig& ac, 
         hShare->SetFillColor(kTeal + 1); hShare->SetFillStyle(1001);
         hShare->SetLineColor(kBlack); hShare->SetLineWidth(2);
         hShare->SetBarWidth(0.75); hShare->SetBarOffset(0.125);
-        hShare->Draw("BAR1");
+        hShare->Draw("BAR");
 
         TLatex pctTxt;
         pctTxt.SetTextFont(42); pctTxt.SetTextSize(0.025); pctTxt.SetTextAlign(21);
@@ -1049,7 +1049,7 @@ static void PlotSingleSubChannels(const ScenarioData& d, const AnalysisConfig& a
         h->SetFillColor(d.cfg.color); h->SetFillStyle(1001);
         h->SetLineColor(kBlack); h->SetLineWidth(2);
         h->SetBarWidth(0.75); h->SetBarOffset(0.125);
-        h->Draw("BAR1");
+        h->Draw("BAR");
 
         TLatex valTxt;
         valTxt.SetTextFont(42); valTxt.SetTextSize(0.025); valTxt.SetTextAlign(21);
@@ -1155,14 +1155,14 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
             auto* hb = new TH1D(Form("hFragD_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
             hb->SetBinContent(1, dv + lv);
             hb->SetFillColor(deltaCol); hb->SetFillStyle(1001); hb->SetLineColor(kBlack); hb->SetLineWidth(1);
-            hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR1 SAME");
+            hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
         }
         // ... then the direct part solid on top, so the visible cap = delta-rays.
         if (dv > 0.0) {
             auto* hb = new TH1D(Form("hFragB_%d_%s", i, d.cfg.tag.c_str()), "", 1, i, i + 1);
             hb->SetBinContent(1, dv);
             hb->SetFillColor(col); hb->SetFillStyle(1001); hb->SetLineColor(kBlack); hb->SetLineWidth(1);
-            hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR1 SAME");
+            hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
         }
         auto* hleg = new TH1D(Form("hFragL_%d_%s", i, d.cfg.tag.c_str()), "", 1, 0, 1);
         hleg->SetFillColor(col); hleg->SetFillStyle(1001); hleg->SetLineColor(kBlack);
@@ -1625,11 +1625,11 @@ static void PlotSingleFragmentCounts(const ScenarioData& d, const AnalysisConfig
         hEntrances->GetYaxis()->SetLabelSize(0.036); hEntrances->GetYaxis()->CenterTitle(true);
         hEntrances->SetFillColor(kAzure + 1); hEntrances->SetLineColor(kAzure + 2);
         hEntrances->SetBarWidth(0.36); hEntrances->SetBarOffset(0.11);
-        hEntrances->Draw("BAR1");
+        hEntrances->Draw("BAR");
 
         hHitEvents->SetFillColor(kOrange + 1); hHitEvents->SetLineColor(kOrange + 2);
         hHitEvents->SetBarWidth(0.36); hHitEvents->SetBarOffset(0.53);
-        hHitEvents->Draw("BAR1 SAME");
+        hHitEvents->Draw("BAR SAME");
 
         objs.push_back(hEntrances); labs.push_back("Target boundary entrances"); opts.push_back("f");
         objs.push_back(hHitEvents); labs.push_back("Ionizing events (Ions > 0)");  opts.push_back("f");
@@ -1641,7 +1641,7 @@ static void PlotSingleFragmentCounts(const ScenarioData& d, const AnalysisConfig
         hHitEvents->GetYaxis()->SetLabelSize(0.036); hHitEvents->GetYaxis()->CenterTitle(true);
         hHitEvents->SetFillColor(kOrange + 1); hHitEvents->SetLineColor(kOrange + 2);
         hHitEvents->SetBarWidth(0.70); hHitEvents->SetBarOffset(0.15);
-        hHitEvents->Draw("BAR1");
+        hHitEvents->Draw("BAR");
         objs.push_back(hHitEvents); labs.push_back("Ionizing events (Ions > 0)"); opts.push_back("f");
     }
 
@@ -2181,7 +2181,7 @@ static void PlotCompareGroupedBars(const std::vector<ScenarioData>& all, const A
         hists[s]->SetLineWidth(1);
         hists[s]->SetBarWidth(bw * 0.92);
         hists[s]->SetBarOffset(0.10 + s * bw);
-        hists[s]->Draw(s == 0 ? "BAR1" : "BAR1 SAME");
+        hists[s]->Draw(s == 0 ? "BAR" : "BAR SAME");
 
         objs.push_back(hists[s]); labs.push_back(ShortLegendLabel(all[s].cfg.legendLabel)); opts.push_back("f");
     }
