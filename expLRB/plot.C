@@ -1218,7 +1218,7 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     // hatches. The legend lives in the right margin (outside the frame).
     const Int_t deltaCol = kGray + 1;
     std::vector<TObject*> legObjs; std::vector<std::string> legLabs;
-    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(0.011); aLab.SetTextAlign(21);
+    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(0.010); aLab.SetTextAlign(21);
     // Map a y-value to a fraction of the pad height (and back), so isotope
     // labels can be de-overlapped in pad space and leaders drawn to their bands.
     const double yLo = pc.logY ? pc.yMin : 0.0;
@@ -1266,11 +1266,12 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
             hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
         }
-        // Mass-number labels: place each on its isotope band when the band is
-        // tall enough to hold the text; otherwise nudge it vertically within the
-        // column and connect it to the band with a thin leader line. This keeps
-        // every number tied to its own colour band without a diagonal pile-up.
-        if (ni <= 16) {
+        // Mass-number labels: each is "%A% + isotope share of the element" drawn
+        // as two horizontal lines via #splitline. Placed on its band centre when
+        // it fits; otherwise nudged within the column and tied to the band by a
+        // thin leader line. The share is a percentage (not a log ratio) so it is
+        // unambiguous.
+        if (ni <= 16 && Dtot > 0.0) {
             std::vector<double> bandF(ni, -1.0), labF(ni, -1.0);
             for (int k = 0; k < ni; ++k) {
                 const double ehi = toDose(cum[k]);
@@ -1279,21 +1280,22 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
                 bandF[k] = 0.5 * (toFrac(ehi) + toFrac(std::max(elo, yLo)));
                 labF[k]  = bandF[k];
             }
-            // de-overlap: enforce a minimum separation, then keep inside [0.03,0.97]
-            const double minSep = 0.017;
+            const double minSep = 0.024;
             double prev = -1e9;
             for (int k = 0; k < ni; ++k) {
                 if (labF[k] < 0) continue;
                 if (labF[k] < prev + minSep) labF[k] = prev + minSep;
                 prev = labF[k];
             }
-            if (prev > 0.97) { const double sh = prev - 0.97; for (int k = 0; k < ni; ++k) if (labF[k] >= 0) labF[k] -= sh; }
+            if (prev > 0.965) { const double sh = prev - 0.965; for (int k = 0; k < ni; ++k) if (labF[k] >= 0) labF[k] -= sh; }
             for (int k = 0; k < ni; ++k) {
                 if (labF[k] < 0) continue;
+                const double pct = 100.0 * isos[k].direct / Dtot;
+                const std::string ps = (pct >= 1.0) ? Form("%.0f%%", pct) : (pct > 0.0 ? "<1%" : "0%");
                 const bool leader = std::fabs(labF[k] - bandF[k]) > 0.010;
                 const double xLab = i + 0.5 + (leader ? 0.20 : 0.0);
                 aLab.SetTextAlign(leader ? 12 : 21);
-                aLab.DrawLatex(xLab, toVal(labF[k]), Form("%d", isos[k].A));
+                aLab.DrawLatex(xLab, toVal(labF[k]), Form("#splitline{%d}{%s}", isos[k].A, ps.c_str()));
                 if (leader) {
                     auto* ln = new TLine(i + 0.5, toVal(bandF[k]), xLab - 0.02, toVal(labF[k]));
                     ln->SetLineColor(kBlack); ln->SetLineWidth(1); ln->Draw();
