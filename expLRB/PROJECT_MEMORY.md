@@ -317,24 +317,37 @@ x (множитель) и по **горизонтальному сдвигу** �
 
 ## 12.5 Статус кампании (обновлять по мере выполнения)
 
-- **Отправлено**: 64 варианта (8 `_had`-баз × 8 пресетов), HTCondor, `THREADS=10`, `EVENTS_PER_JOB=50000`
-  → **3200 чанков**. Метка запуска `RUN_LABEL` = timestamp (по умолчанию) — чанки
-  `output/raw/<tag>__<had>_<ts>_<proc>.root`.
-- **SLURM**: логин-хост (`ss-login:30022`) на момент отправки **недоступен** (timeout) — кампания идёт
-  только на HTCondor. При возврате SLURM: `SCHEDULER=slurm jobs/submit.sh --axis <suspension-базы>`
-  (при этом те же варианты на HTCondor не переотправлять).
-- **Финализация** (после завершения всех задач, выполнять на кластере, где лежат merged-файлы):
-  ```bash
-  cd ~/projects/geant4/expLRB
-  condor_q -af JobStatus | sort | uniq -c         # 0 строк = всё завершено
-  for t in $(cut -f1 config/macros/manifest.tsv | grep '__'); do
-    scripts/merge_all.sh "$t" output/root output/raw
-  done
-  root -l -q 'plot.C+'                              # по-конфиговые графики + Grid_Configs_<base>.pdf
-  ```
-  Замечание по памяти: `plot.C` держит в памяти все базовые (пустой `had`) сценарии разом
-  (~168·10⁶ событий) и грузит варианты оси **по одной базе**; на логин-хосте `inter` ~93 ГБ ОЗУ.
-  Если не хватает — запускать через SLURM (`srun`/batch) или анализировать базы по отдельности.
+Кампания разбита по двум планировщикам (общий lustre-`/home`, один репозиторий и один `output/raw`):
+- **HTCondor** (`inter`): monolayer-варианты — 32 сценария (`monolayer_*_had__*`) × 80 чанков = **2560**,
+  `THREADS=10`, `EVENTS_PER_JOB=50000`.
+- **SLURM**: suspension-варианты — 32 сценария (`suspension_*_had__*`) × 20 чанков = **640**,
+  `THREADS=1`, `EVENTS_PER_JOB=50000` (~1000+ свободных CPU).
+Итого **3200** чанков `output/raw/<tag>__<had>_<ts>_<proc>.root` (`RUN_LABEL` = timestamp по умолчанию).
+
+**Доступ к SLURM (важно):** логин-хост (`ss-login:30022`) достижим **только с локальной машины**
+(локальный ssh-алиас `slurm`; в `~/.ssh/config` → `HostName` + `Port 30022`), но **не с `inter`**
+(`ssh slurm` c `inter` → timeout). Оба планировщика видят общий lustre-`/home`, поэтому репозиторий и
+`output/raw` общие. Поэтому SLURM-задачи ставятся с **локальной машины**, а HTCondor-задачи — с `inter`.
+При повторной отправке suspension-вариантов в очереди SLURM висели **дубликаты** (несколько наборов
+массивов от прежних попыток) → все отменены (`scancel` по base-array id) и отправлен **один чистый
+набор** (32 массива × 20 = 640); прежние suspension-чанки удалены, чтобы `merge_all.sh` не сдвоил
+статистику. `monitor_all.py` настраивается как `CONDOR_SSH="ssh <user>@inter"`,
+`SLURM_SSH="ssh slurm"`.
+
+**Финализация** (после завершения всех задач, где лежат merged-файлы; ROOT есть на `inter`, у SLURM
+логин-пода ROOT нет):
+```bash
+cd ~/projects/geant4/expLRB
+condor_q -af JobStatus | sort | uniq -c                        # HTCondor: пусто = готово
+ssh slurm 'squeue -u "$USER" -h -r -o "%t" | sort | uniq -c'   # SLURM: пусто = готово
+for t in $(cut -f1 config/macros/manifest.tsv | grep '__'); do
+  scripts/merge_all.sh "$t" output/root output/raw
+done
+root -l -q 'plot.C+'          # по-конфиговые графики + Grid_Configs_<base>.pdf
+```
+Замечание по памяти: `plot.C` держит в памяти все базовые (пустой `had`) сценарии разом
+(~168·10⁶ событий) и грузит варианты оси **по одной базе**; на `inter` ~93 ГБ ОЗУ. Если не хватает —
+анализировать базы по отдельности (или через SLURM batch).
 
 
 

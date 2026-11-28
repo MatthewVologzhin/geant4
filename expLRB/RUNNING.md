@@ -250,10 +250,17 @@ scripts/merge_all.sh monolayer_nofilt_cells_had output/root output/raw
 ОС Ubuntu) — ~1200 свободных CPU (partitions `all`, `student`, `vclass`). Бинарь, собранный на
 AlmaLinux-хосте HTCondor, запускается и на Ubuntu-узлах SLURM (проверено).
 
-Чтобы задействовать SLURM: зайдите на его логин-хост (адрес/порт — у администратора кластера; в
-репозиторий не писать) и из того же общего репозитория запустите `SCHEDULER=slurm jobs/submit.sh …`
-(`submit.sh` должен исполняться там, где есть `sbatch`/`sinfo`). Удобно разделять нагрузку: быстрые
-`monolayer` — на HTCondor, тяжёлые `suspension` — на SLURM.
+Чтобы задействовать SLURM: зайдите на его логин-хост и из того же общего репозитория запустите
+`SCHEDULER=slurm jobs/submit.sh …` (`submit.sh` должен исполняться там, где есть `sbatch`/`sinfo`).
+Удобно разделять нагрузку: быстрые `monolayer` — на HTCondor, тяжёлые `suspension` — на SLURM.
+
+**Доступ к SLURM (адрес/порт — у администратора, в репозиторий не писать):** этот логин-хост достижим
+**только с локальной рабочей машины** (ssh-алиас `slurm` в `~/.ssh/config`), но **не с HTCondor-хоста
+`inter`** (там `ssh slurm` даёт timeout). Так как оба кластера видят общий lustre-`/home`, SLURM-задачи
+ставятся с локальной машины (`ssh slurm 'cd ~/projects/geant4/expLRB && SCHEDULER=slurm jobs/submit.sh
+--axis …'`), а HTCondor-задачи — с `inter`. Мониторинг обоих: `jobs/monitor_all.py` с
+`CONDOR_SSH="ssh <user>@inter" SLURM_SSH="ssh slurm"`. У SLURM логин-пода нет ROOT — финальный
+`plot.C` запускать на `inter` (там `/usr/bin/root`).
 
 Грабли: SLURM копирует `jobs/slurm_array.sh` в свой spool, поэтому `job_run_one.sh` нельзя искать
 относительно `BASH_SOURCE` — путь передаётся абсолютным через переменную `JOB_RUNNER` (её экспортирует
