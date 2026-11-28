@@ -315,11 +315,26 @@ E_{kin}/A, Fragment entrances by species, Hadronic vertex z, Dose by family. П�
 x (множитель) и по **горизонтальному сдвигу** положения пиков (изменение энергетического/kinematic
 масштаба), а не по «высоте» линии в px.
 
-## 12.5 Открыто/статус кампании
+## 12.5 Статус кампании (обновлять по мере выполнения)
 
-- Кампания (64 варианта × прод-статистика: monolayer `4·10⁶`, suspension `1·10⁶`) запускается через
-  `jobs/submit.sh --axis` на HTCondor и/или SLURM; слежение — `jobs/monitor.py`/`jobs/monitor_all.py`.
-- После завершения: `scripts/merge_all.sh <base>__<had>`, затем `root -l -q 'plot.C+'` (на кластере, где
-  лежат merged-файлы) → по-конфиговые суффиксные графики + `Grid_Configs_<base>.pdf`.
+- **Отправлено**: 64 варианта (8 `_had`-баз × 8 пресетов), HTCondor, `THREADS=10`, `EVENTS_PER_JOB=50000`
+  → **3200 чанков**. Метка запуска `RUN_LABEL` = timestamp (по умолчанию) — чанки
+  `output/raw/<tag>__<had>_<ts>_<proc>.root`.
+- **SLURM**: логин-хост (`ss-login:30022`) на момент отправки **недоступен** (timeout) — кампания идёт
+  только на HTCondor. При возврате SLURM: `SCHEDULER=slurm jobs/submit.sh --axis <suspension-базы>`
+  (при этом те же варианты на HTCondor не переотправлять).
+- **Финализация** (после завершения всех задач, выполнять на кластере, где лежат merged-файлы):
+  ```bash
+  cd ~/projects/geant4/expLRB
+  condor_q -af JobStatus | sort | uniq -c         # 0 строк = всё завершено
+  for t in $(cut -f1 config/macros/manifest.tsv | grep '__'); do
+    scripts/merge_all.sh "$t" output/root output/raw
+  done
+  root -l -q 'plot.C+'                              # по-конфиговые графики + Grid_Configs_<base>.pdf
+  ```
+  Замечание по памяти: `plot.C` держит в памяти все базовые (пустой `had`) сценарии разом
+  (~168·10⁶ событий) и грузит варианты оси **по одной базе**; на логин-хосте `inter` ~93 ГБ ОЗУ.
+  Если не хватает — запускать через SLURM (`srun`/batch) или анализировать базы по отдельности.
+
 
 
