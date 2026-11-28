@@ -1218,10 +1218,10 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     // hatches. The legend lives in the right margin (outside the frame).
     const Int_t deltaCol = kGray + 1;
     std::vector<TObject*> legObjs; std::vector<std::string> legLabs;
-    // Label size adapts to the number of element columns: fewer columns -> more
-    // room -> larger, more readable numbers.
-    const double labSize = (n <= 8) ? 0.017 : (n <= 16 ? 0.012 : 0.010);
-    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(labSize); aLab.SetTextAlign(21);
+    // Isotope labels are a single horizontal line "A·pct%" inside the column;
+    // the font is auto-sized so the widest label never exceeds the column width.
+    const double colW = (1.0 - ac.leftMargin - 0.30) / std::max(1, n);
+    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextAlign(21);
     // Map a y-value to a fraction of the pad height (and back), so isotope
     // labels can be de-overlapped in pad space and leaders drawn to their bands.
     const double yLo = pc.logY ? pc.yMin : 0.0;
@@ -1269,12 +1269,22 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
             hb->SetLineColor(kBlack); hb->SetLineWidth(1);
             hb->SetBarWidth(1.0); hb->SetBarOffset(0.0); hb->Draw("BAR SAME");
         }
-        // Mass-number labels: each is "%A% + isotope share of the element" drawn
-        // as two horizontal lines via #splitline. Placed on its band centre when
-        // it fits; otherwise nudged within the column and tied to the band by a
-        // thin leader line. The share is a percentage (not a log ratio) so it is
-        // unambiguous.
-        if (ni <= 16 && Dtot > 0.0) {
+        // Isotope labels: ONE horizontal line "A·pct%" (bold mass number, middot
+        // separator; the share is a percentage, not a log ratio). The font size
+        // is chosen per column so the widest label fits inside the column width.
+        // A label sits on its band centre when there is room; otherwise it is
+        // nudged vertically and tied to its band by a thin leader.
+        if (Dtot > 0.0) {
+            std::vector<std::string> lstr(ni);
+            size_t lmax = 1;
+            for (int k = 0; k < ni; ++k) {
+                const double pct = 100.0 * isos[k].direct / Dtot;
+                const std::string ps = (pct >= 1.0) ? Form("%.0f%%", pct) : (pct > 0.0 ? "<1%" : "0%");
+                lstr[k] = Form("#font[2]{%d}#dot%s", isos[k].A, ps.c_str());
+                lmax = std::max(lmax, std::string(Form("%d.%s", isos[k].A, ps.c_str())).size());
+            }
+            const double fs = std::min(0.020, std::max(0.0045, 0.90 * colW / (0.60 * static_cast<double>(lmax))));
+            aLab.SetTextSize(fs);
             std::vector<double> bandF(ni, -1.0), labF(ni, -1.0);
             for (int k = 0; k < ni; ++k) {
                 const double ehi = toDose(cum[k]);
@@ -1283,24 +1293,19 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
                 bandF[k] = 0.5 * (toFrac(ehi) + toFrac(std::max(elo, yLo)));
                 labF[k]  = bandF[k];
             }
-            const double minSep = 2.6 * labSize;
+            const double minSep = 1.5 * fs;
             double prev = -1e9;
             for (int k = 0; k < ni; ++k) {
                 if (labF[k] < 0) continue;
                 if (labF[k] < prev + minSep) labF[k] = prev + minSep;
                 prev = labF[k];
             }
-            if (prev > 0.965) { const double sh = prev - 0.965; for (int k = 0; k < ni; ++k) if (labF[k] >= 0) labF[k] -= sh; }
+            if (prev > 0.97) { const double sh = prev - 0.97; for (int k = 0; k < ni; ++k) if (labF[k] >= 0) labF[k] -= sh; }
             for (int k = 0; k < ni; ++k) {
                 if (labF[k] < 0) continue;
-                const double pct = 100.0 * isos[k].direct / Dtot;
-                const std::string ps = (pct >= 1.0) ? Form("%.0f%%", pct) : (pct > 0.0 ? "<1%" : "0%");
-                const bool leader = std::fabs(labF[k] - bandF[k]) > 0.010;
-                const double xLab = i + 0.5 + (leader ? 0.20 : 0.0);
-                aLab.SetTextAlign(leader ? 12 : 21);
-                aLab.DrawLatex(xLab, toVal(labF[k]), Form("#splitline{%d}{%s}", isos[k].A, ps.c_str()));
-                if (leader) {
-                    auto* ln = new TLine(i + 0.5, toVal(bandF[k]), xLab - 0.02, toVal(labF[k]));
+                aLab.DrawLatex(i + 0.5, toVal(labF[k]), lstr[k].c_str());
+                if (std::fabs(labF[k] - bandF[k]) > 0.008) {
+                    auto* ln = new TLine(i + 0.5, toVal(bandF[k]), i + 0.5, toVal(labF[k] - 0.65 * fs));
                     ln->SetLineColor(kBlack); ln->SetLineWidth(1); ln->Draw();
                 }
             }
