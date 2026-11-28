@@ -1218,7 +1218,10 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
     // hatches. The legend lives in the right margin (outside the frame).
     const Int_t deltaCol = kGray + 1;
     std::vector<TObject*> legObjs; std::vector<std::string> legLabs;
-    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(0.010); aLab.SetTextAlign(21);
+    // Label size adapts to the number of element columns: fewer columns -> more
+    // room -> larger, more readable numbers.
+    const double labSize = (n <= 8) ? 0.017 : (n <= 16 ? 0.012 : 0.010);
+    TLatex aLab; aLab.SetTextFont(42); aLab.SetTextSize(labSize); aLab.SetTextAlign(21);
     // Map a y-value to a fraction of the pad height (and back), so isotope
     // labels can be de-overlapped in pad space and leaders drawn to their bands.
     const double yLo = pc.logY ? pc.yMin : 0.0;
@@ -1280,7 +1283,7 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
                 bandF[k] = 0.5 * (toFrac(ehi) + toFrac(std::max(elo, yLo)));
                 labF[k]  = bandF[k];
             }
-            const double minSep = 0.024;
+            const double minSep = 2.6 * labSize;
             double prev = -1e9;
             for (int k = 0; k < ni; ++k) {
                 if (labF[k] < 0) continue;
