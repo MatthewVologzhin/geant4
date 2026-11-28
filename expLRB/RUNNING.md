@@ -254,13 +254,31 @@ AlmaLinux-хосте HTCondor, запускается и на Ubuntu-узлах 
 `SCHEDULER=slurm jobs/submit.sh …` (`submit.sh` должен исполняться там, где есть `sbatch`/`sinfo`).
 Удобно разделять нагрузку: быстрые `monolayer` — на HTCondor, тяжёлые `suspension` — на SLURM.
 
-**Доступ к SLURM (адрес/порт — у администратора, в репозиторий не писать):** этот логин-хост достижим
-**только с локальной рабочей машины** (ssh-алиас `slurm` в `~/.ssh/config`), но **не с HTCondor-хоста
-`inter`** (там `ssh slurm` даёт timeout). Так как оба кластера видят общий lustre-`/home`, SLURM-задачи
-ставятся с локальной машины (`ssh slurm 'cd ~/projects/geant4/expLRB && SCHEDULER=slurm jobs/submit.sh
---axis …'`), а HTCondor-задачи — с `inter`. Мониторинг обоих: `jobs/monitor_all.py` с
-`CONDOR_SSH="ssh <user>@inter" SLURM_SSH="ssh slurm"`. У SLURM логин-пода нет ROOT — финальный
-`plot.C` запускать на `inter` (там `/usr/bin/root`).
+**Доступ к SLURM (вход только с локальной машины).** Логин-хост SLURM — отдельный узел (Ubuntu),
+общий lustre-`/home` с HTCondor. Ключевое: он достижим **только с локальной рабочей машины** и
+**не с HTCondor-хоста `inter`** (там TCP до порта `30022` уходит в `timeout`, хотя имя `ss-login`
+в `/etc/hosts` присутствует).
+
+Хост: `ss-login` (`10.40.10.0`, резерв `10.40.11.0` / `10.40.12.0`), порт `30022`, пользователь
+`mvologzhin`, вход по ключу (как на кластер). Добавьте в `~/.ssh/config` **локальной** машины:
+
+```
+Host slurm
+    HostName 10.40.10.0
+    Port 30022
+    User mvologzhin
+```
+
+Затем с локальной машины:
+```bash
+ssh slurm                                          # вход на логин-хост SLURM
+ssh slurm 'hostname; sinfo -h -o "%P %a %C"'        # хост + свободные CPU по партициям
+ssh slurm 'cd ~/projects/geant4/expLRB && SCHEDULER=slurm jobs/submit.sh --axis <базы>'
+```
+Проверка, что это ТОТ самый узел и он видит общий репозиторий/выходы: `ssh slurm 'ls
+~/projects/geant4/expLRB/output/raw | head'` (там же лежат и HTCondor-чанки). У SLURM логин-пода
+**нет ROOT** — финальный `plot.C` запускать на `inter` (там `/usr/bin/root`). Мониторинг обоих
+планировщиков — `jobs/monitor_all.py` с `CONDOR_SSH="ssh mvologzhin@inter" SLURM_SSH="ssh slurm"`.
 
 Грабли: SLURM копирует `jobs/slurm_array.sh` в свой spool, поэтому `job_run_one.sh` нельзя искать
 относительно `BASH_SOURCE` — путь передаётся абсолютным через переменную `JOB_RUNNER` (её экспортирует
