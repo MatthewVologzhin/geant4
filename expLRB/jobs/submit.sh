@@ -91,20 +91,24 @@ fi
 declare -a rows=()
 while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro memory disk base had; do
   [[ -z "$scenario" || "$scenario" == "scenario" ]] && continue
-  if [[ "${#selected[@]}" -gt 0 ]]; then
-    keep=0
-    for want in "${selected[@]}"; do
-      [[ "$want" == "$scenario" || "$want" == "$(basename "$macro" .mac)" || "$want" == "$base" ]] && keep=1
-    done
-    [[ "$keep" == "1" ]] || continue
-  else
-    # No explicit selection: bases by default, axis variants with --axis.
-    if [[ "$AXIS_ONLY" == "1" ]]; then
-      [[ -n "$had" ]] || continue
-    else
-      [[ -z "$had" ]] || continue
-    fi
+  keep=1
+  # Axis filter: --axis -> variants only; otherwise (with no explicit tag
+  # selection) bases only. An explicit tag selection bypasses the default.
+  if [[ "$AXIS_ONLY" == "1" ]]; then
+    [[ -n "$had" ]] || keep=0
+  elif [[ "${#selected[@]}" -eq 0 ]]; then
+    [[ -z "$had" ]] || keep=0
   fi
+  # Tag selection (intersection with the axis filter above). Matching by base
+  # name keeps that base's variants too when --axis is given.
+  if [[ "$keep" == "1" && "${#selected[@]}" -gt 0 ]]; then
+    match=0
+    for want in "${selected[@]}"; do
+      [[ "$want" == "$scenario" || "$want" == "$(basename "$macro" .mac)" || "$want" == "$base" ]] && match=1
+    done
+    [[ "$match" == "1" ]] || keep=0
+  fi
+  [[ "$keep" == "1" ]] || continue
   rows+=("$scenario|$geometry|$sample|$physics|$scoring|$events|$threads|$macro|$memory|$disk|$base|$had")
 done < "$MANIFEST"
 
