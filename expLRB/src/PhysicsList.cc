@@ -43,7 +43,9 @@ void PhysicsList::SetHadronicPhysics(const G4String& name)
     }
 
     if (name != "QGSP_BIC_HP" && name != "FTFP_BERT_HP" &&
-        name != "QBBC" && name != "INCLXX_HP")
+        name != "QBBC" && name != "INCLXX_HP" &&
+        name != "QGSP_BIC" && name != "QGSP_BERT_HP" &&
+        name != "FTF_BIC" && name != "Shielding")
     {
         G4Exception("PhysicsList::SetHadronicPhysics", "InvalidHadronicName",
                     FatalException, ("Unknown hadronic physics option: " + name).c_str());
@@ -131,6 +133,26 @@ void PhysicsList::BuildHadronicConstructors()
         add("G4StoppingPhysics");
         add("G4IonPhysics");
         add("G4HadronPhysicsINCLXX");
+    } else if (fHadName == "QGSP_BIC") {
+        add("G4HadronElasticPhysics");
+        add("G4StoppingPhysics");
+        add("G4IonPhysics");
+        add("G4HadronPhysicsQGSP_BIC");
+    } else if (fHadName == "QGSP_BERT_HP") {
+        add("G4HadronElasticPhysicsVI");
+        add("G4StoppingPhysics");
+        add("G4IonPhysics");
+        add("G4HadronPhysicsQGSP_BERT_HP");
+    } else if (fHadName == "FTF_BIC") {
+        add("G4HadronElasticPhysics");
+        add("G4StoppingPhysics");
+        add("G4IonPhysics");
+        add("G4HadronPhysicsFTF_BIC");
+    } else if (fHadName == "Shielding") {
+        add("G4HadronElasticPhysicsHP");
+        add("G4StoppingPhysics");
+        add("G4IonPhysics");
+        add("G4HadronPhysicsShielding");
     }
 }
 

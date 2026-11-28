@@ -8,9 +8,9 @@ PhysicsListMessenger::PhysicsListMessenger(PhysicsList* pPhys) : fPhysicsList(pP
     fPhysDir->SetGuidance("Custom Modular Physics configuration.");
 
     fHadPhysCmd = std::make_unique<G4UIcmdWithAString>("/physics/setHadronic", this);
-    fHadPhysCmd->SetGuidance("Set Hadronic physics: QGSP_BIC_HP, FTFP_BERT_HP, QBBC, INCLXX_HP or 'none'");
+    fHadPhysCmd->SetGuidance("Set Hadronic physics: QGSP_BIC_HP, FTFP_BERT_HP, QBBC, INCLXX_HP, QGSP_BIC, QGSP_BERT_HP, FTF_BIC, Shielding or 'none'");
     fHadPhysCmd->SetParameterName("HadName", false);
-    fHadPhysCmd->SetCandidates("QGSP_BIC_HP FTFP_BERT_HP QBBC INCLXX_HP none off DISABLED false");
+    fHadPhysCmd->SetCandidates("QGSP_BIC_HP FTFP_BERT_HP QBBC INCLXX_HP QGSP_BIC QGSP_BERT_HP FTF_BIC Shielding none off DISABLED false");
     fHadPhysCmd->AvailableForStates(G4State_PreInit);
 
     fEnableHadCmd = std::make_unique<G4UIcmdWithABool>("/physics/enableHadronic", this);
