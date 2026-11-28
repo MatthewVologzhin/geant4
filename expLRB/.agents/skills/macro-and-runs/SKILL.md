@@ -17,7 +17,8 @@ description: Создание и проверка конфигов config/runs.c
    - `/control/execute <override.mac>` — перед `/run/initialize`.
 2. **Актуальный синтаксис команд проекта:**
    - `/bio/layer/create <material> <number_cell>` (строго 2 аргумента, без `monolayer`/`suspension`!).
-   - `/physics/setHadronic <QGSP_BIC_HP|FTFP_BERT_HP|QBBC|INCLXX_HP|none>`
+   - `/physics/setHadronic <QGSP_BIC_HP|FTFP_BERT_HP|QBBC|INCLXX_HP|QGSP_BIC|QGSP_BERT_HP|FTF_BIC|Shielding|none>`
+     (недоступны `*AllHP`/`*LEND` — нет данных `G4PARTICLEHPDATA`/`G4PENDL`; см. `PROJECT_MEMORY.md` §12)
    - `/physics/enableHadronic <true|false>`
    - `/physics/setEM <EM_Opt4|EM_Opt3|EM_Opt0|...>`
    - `/physics/enableDNAActivator <true|false>`

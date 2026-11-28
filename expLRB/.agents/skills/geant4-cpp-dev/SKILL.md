@@ -31,3 +31,15 @@ description: Разработка, отладка, настройка физик
   (5 файлов, см. `PROJECT_MEMORY.md` §8) и пересобрать Geant4. Симптом: SIGSEGV (139) или abort (134)
   на первом событии; EM-сценарии при этом работают.
 - **CRLF в shebang** скриптов → HTCondor `Failed to execute … errno=2`. Проверяй `sed -n 1p file | cat -A`.
+
+## Адронные пресеты (`/physics/setHadronic`)
+- Доступные имена и состав — в `PhysicsList::BuildHadronicConstructors` (и `PROJECT_MEMORY.md` §12):
+  `QGSP_BIC_HP`, `FTFP_BERT_HP`, `QBBC`, `INCLXX_HP`, `QGSP_BIC`, `QGSP_BERT_HP`, `FTF_BIC`,
+  `Shielding`, `none`.
+- **Имя конструктора `INCLXX` в `G4PhysicsConstructorRegistry` — `G4HadronPhysicsINCLXX`** (без `_HP`).
+- **`*AllHP` недоступны**: `G4ParticleHPInelasticData` требует `G4PARTICLEHPDATA`/`G4PROTONHPDATA`
+  (HP-данные протонов), которых нет в сборке → `G4HadronicException` на init. **`*LEND`** требуют
+  `G4PENDL`. Перед добавлением пресета сверяй наличие данных в `install/share/Geant4/data/`.
+- Проверка нового пресета: `sed 's#^/physics/setHadronic.*#/physics/setHadronic <NAME>#' \
+  config/macros/test_dedx.mac > /tmp/h.mac` и `./build/expLRB -m /tmp/h.mac --events 20 --threads 2 -o /tmp/h.root`
+  (HP-пресеты грузят данные ~минуту при init).

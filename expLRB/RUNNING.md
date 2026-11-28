@@ -55,9 +55,7 @@ score-target = medium
 hadronic = QGSP_BIC_HP
 hadronic-enabled = true
 em = EM_Opt4
-dna-activator = true
-
-[scoring:standard]
+dna-activator = true[scoring:standard]
 profile = standard
 
 [run:smoke]
@@ -89,6 +87,18 @@ label = My custom run              # подпись в plot.C
 
 Валидация: неизвестные ссылки/секции, пустые обязательные поля и нечисловые
 `cells/events/threads` приводят к ошибке с именем секции.
+
+### Адронные конфигурации (`/physics/setHadronic`)
+Доступны (PreInit; см. `PhysicsList::BuildHadronicConstructors`):
+`QGSP_BIC_HP` (дефолт), `FTFP_BERT_HP`, `QBBC`, `INCLXX_HP`, **`QGSP_BIC`**, **`QGSP_BERT_HP`**,
+**`FTF_BIC`**, **`Shielding`**, а также `none/off/false` (выключает адронику).
+**Недоступны** из-за отсутствующих данных: `*AllHP` (нужен `G4PARTICLEHPDATA`), `*LEND`
+(нужен `G4PENDL`). Имя конструктора `INCLXX` в реестре — `G4HadronPhysicsINCLXX` (без `_HP`).
+
+**Сравнительная кампания моделей** (план): прогон одного сценария под несколькими пресетами с
+суффиксом тега `__<HAD>` (напр. `suspension_nofilt_cells_had__ftf_bic`) для raw/merged/plots, плюс
+сводные **сетки «величины × конфиги»** на одном холсте. Запуск — на **HTCondor и/или SLURM**, слежение
+через `jobs/monitor.py`/`jobs/monitor_all.py`. Детали и статус — `PROJECT_MEMORY.md` §12.
 
 ---
 
