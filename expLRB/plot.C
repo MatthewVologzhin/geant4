@@ -1280,8 +1280,8 @@ static void PlotSingleFragments(const ScenarioData& d, const AnalysisConfig& ac,
             for (int k = 0; k < ni; ++k) {
                 const double pct = 100.0 * isos[k].direct / Dtot;
                 const std::string ps = (pct >= 1.0) ? Form("%.0f%%", pct) : (pct > 0.0 ? "<1%" : "0%");
-                lstr[k] = Form("#font[2]{%d}#dot%s", isos[k].A, ps.c_str());
-                lmax = std::max(lmax, std::string(Form("%d.%s", isos[k].A, ps.c_str())).size());
+                lstr[k] = Form("%d/%s", isos[k].A, ps.c_str());
+                lmax = std::max(lmax, std::string(Form("%d/%s", isos[k].A, ps.c_str())).size());
             }
             const double fs = std::min(0.020, std::max(0.0045, 0.90 * colW / (0.60 * static_cast<double>(lmax))));
             aLab.SetTextSize(fs);
