@@ -90,15 +90,44 @@ label = My custom run              # подпись в plot.C
 
 ### Адронные конфигурации (`/physics/setHadronic`)
 Доступны (PreInit; см. `PhysicsList::BuildHadronicConstructors`):
-`QGSP_BIC_HP` (дефолт), `FTFP_BERT_HP`, `QBBC`, `INCLXX_HP`, **`QGSP_BIC`**, **`QGSP_BERT_HP`**,
-**`FTF_BIC`**, **`Shielding`**, а также `none/off/false` (выключает адронику).
+`QGSP_BIC_HP` (дефолт), `FTFP_BERT_HP`, `QBBC`, `INCLXX_HP`, `QGSP_BIC`, `QGSP_BERT_HP`,
+`FTF_BIC`, `Shielding`, а также `none/off/false` (выключает адронику).
 **Недоступны** из-за отсутствующих данных: `*AllHP` (нужен `G4PARTICLEHPDATA`), `*LEND`
 (нужен `G4PENDL`). Имя конструктора `INCLXX` в реестре — `G4HadronPhysicsINCLXX` (без `_HP`).
 
-**Сравнительная кампания моделей** (план): прогон одного сценария под несколькими пресетами с
-суффиксом тега `__<HAD>` (напр. `suspension_nofilt_cells_had__ftf_bic`) для raw/merged/plots, плюс
-сводные **сетки «величины × конфиги»** на одном холсте. Запуск — на **HTCondor и/или SLURM**, слежение
-через `jobs/monitor.py`/`jobs/monitor_all.py`. Детали и статус — `PROJECT_MEMORY.md` §12.
+### «Ось конфигураций» адронных моделей (`[axis:hadronic]`)
+Чтобы сравнить адронные модели **на той же** геометрии/EM/материалах/cut'ах (меняется только
+`/physics/setHadronic`), в `config/runs.conf` есть секция:
+
+```ini
+[axis:hadronic]
+enabled = true
+presets = QGSP_BIC_HP QGSP_BIC QGSP_BERT_HP FTF_BIC Shielding FTFP_BERT_HP QBBC INCLXX_HP
+```
+
+При `enabled = true` `scripts/gen_macros.sh` для **каждого сценария, у которого профиль физики
+имеет `hadronic-enabled = true`**, доп. генерирует по одному макросу/строке manifest на каждый
+пресет с суффиксом тега `__<preset-lowercase>`, напр. `suspension_nofilt_cells_had__ftf_bic`:
+- чанки → `output/raw/<tag>__<had>_*.root`;
+- merged → `output/root/<tag>__<had>.root`;
+- графики → `output/plots/analysis/<Type>_<tag>__<had>.pdf`;
+- сводная сетка на базу → `output/plots/analysis/Grid_Configs_<base>.pdf`.
+
+`*_nohad`-сценарии **не** дублируются (их физика не зависит от адронной модели). Отдельный
+сценарий можно исключить из оси строкой `had-axis = false` (так исключены `test_dedx*`).
+
+Отправка кампании (manifest-строки с непустым `had` = варианты оси):
+
+```bash
+jobs/submit.sh --dry-run --axis                 # предпросмотр вариантов оси
+jobs/submit.sh --dry-run monolayer_nofilt_cells_had__ftf_bic
+SCHEDULER=condor jobs/submit.sh --axis          # отправить все варианты (HTCondor)
+SCHEDULER=slurm  jobs/submit.sh --axis          # или SLURM
+```
+
+Без аргументов/`--axis` `jobs/submit.sh` по умолчанию берёт только **базовые** (невариантные)
+строки — историческое поведение сохранено. Слежение — `jobs/monitor.py`/`jobs/monitor_all.py`
+(имена задач содержат суффикс `__<had>`). Детали и статус — `PROJECT_MEMORY.md` §12.
 
 ---
 
@@ -110,9 +139,9 @@ scripts/gen_macros.sh /path/other.conf  # альтернативный конф�
 ```
 
 Пишет:
-- `config/macros/<scenario>.mac`
-- `config/macros/manifest.tsv` (`scenario  geometry  sample  physics  scoring  events  threads  macro`)
-- `config/plot_scenarios.inc` (таблица сценариев для `plot.C`)
+- `config/macros/<scenario>.mac` (и `config/macros/<scenario>__<had>.mac` для вариантов оси — §1);
+- `config/macros/manifest.tsv` (`scenario  geometry  sample  physics  scoring  events  threads  macro  memory  disk  base  had`);
+- `config/plot_scenarios.inc` (таблица сценариев для `plot.C`; последние два поля строки — `base`, `had`).
 
 Повторный запуск идемпотентен. Не правьте сгенерированные файлы вручную.
 
@@ -350,6 +379,11 @@ scripts/build.sh               # переконфигурирует CMake, пе�
 - `HadronVertexZ_*`, `Compare_HadronVertexZ` — z рождения адронных вершин (какой фильтр «опасен»).
 - `ICSD_*` (только для `cells`-сценариев с целью-ядром), `EntranceSpectra_*`, `Kinematics_AllSpectra_MeVu_*`,
   `FragmentCounts_*`, `Compare_*` (одиночный пад).
+- `Grid_Configs_<base>_...` — **сводная сетка «величины × конфигурации»** (ось `[axis:hadronic]`): один
+  холст на базовый сценарий, `3×3` панели-величины (Total/Hadronic E_{dep}, Fragment E_{dep} by element,
+  ICSD, Entrance spectra, Heavy E/A, Fragment counts, HadronVertexZ, Dose by family), в каждой панели —
+  кривые всех адронных пресетов (легенда справа, вне фрейма). Плюс по-конфиговые суффиксные графики
+  `<Type>_<base>__<had>.pdf`. Панель без данных в профиле показывается рамкой «no data in profile».
 
 **Типичные проблемы / правила**
 1. **Легенды.** Многокомпонентные легенды выносятся **за пределы фрейма** (в правое поле,

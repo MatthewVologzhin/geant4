@@ -45,6 +45,8 @@ struct ScenarioConfig {
     double      rhoGcm3;          // Плотность мишени [г/см3]
     Int_t       color;
     Int_t       lineStyle;
+    std::string base;             // База группы оси конфигураций (для варианта); == tag для обычного
+    std::string had;              // Адронный пресет для варианта оси; пусто для обычного сценария
 };
 
 struct PlotConfig {
@@ -2432,6 +2434,380 @@ static void PlotCompareOverlayWithRatio(const std::vector<ScenarioData>& all,
 }
 
 // ============================================================================
+// 7b. СЕТКИ «ВЕЛИЧИНА x КОНФИГУРАЦИЯ» (ось адронных конфигураций)
+// ============================================================================
+// Один холст на базовый сценарий: панели = величины, кривые = конфигурации
+// (по одной на каждый адронный пресет). Панели читают ТОЛЬКО те группы данных,
+// что записал профиль скоринга; отсутствующие ветки -> панель пустая.
+enum class GridPanel {
+    EdepTotal = 0, EdepHad, FragEdep, ICSD, EntranceAllHad,
+    HeavyPerNucl, FragCounts, HadronVZ, DoseByFamily
+};
+static constexpr int kGridPanels = 9;
+
+static bool GridPanelLogX(GridPanel p) {
+    switch (p) {
+        case GridPanel::FragEdep:
+        case GridPanel::FragCounts:
+        case GridPanel::DoseByFamily: return false;
+        default: return true;
+    }
+}
+
+static const char* GridPanelTitle(GridPanel p) {
+    switch (p) {
+        case GridPanel::EdepTotal:      return "Total E_{dep} / event";
+        case GridPanel::EdepHad:        return "Hadronic E_{dep} / event";
+        case GridPanel::FragEdep:       return "Fragment E_{dep} by element";
+        case GridPanel::ICSD:           return "ICSD in target (normalised)";
+        case GridPanel::EntranceAllHad: return "Entrance: all secondary hadrons";
+        case GridPanel::HeavyPerNucl:   return "Heavy (Z#geq3) E_{kin}/A";
+        case GridPanel::FragCounts:     return "Fragment entrances by species";
+        case GridPanel::HadronVZ:       return "Hadronic vertex z";
+        case GridPanel::DoseByFamily:   return "Dose by particle family";
+    }
+    return "";
+}
+
+static const char* GridPanelXTitle(GridPanel p) {
+    switch (p) {
+        case GridPanel::EdepTotal:
+        case GridPanel::EdepHad:        return "E_{dep} [MeV]";
+        case GridPanel::FragEdep:       return "fragment element";
+        case GridPanel::ICSD:           return "#nu (ionisations)";
+        case GridPanel::EntranceAllHad: return "E_{kin} [MeV]";
+        case GridPanel::HeavyPerNucl:   return "E_{kin}/A [MeV/u]";
+        case GridPanel::FragCounts:     return "species";
+        case GridPanel::HadronVZ:       return "z [mm]";
+        case GridPanel::DoseByFamily:   return "family";
+    }
+    return "";
+}
+
+static const char* GridPanelYTitle(GridPanel p) {
+    switch (p) {
+        case GridPanel::EdepTotal:
+        case GridPanel::EdepHad:        return "dN / d(ln E_{dep}) per primary";
+        case GridPanel::FragEdep:       return "E_{dep} [MeV per primary]";
+        case GridPanel::ICSD:           return "frequency per hit target";
+        case GridPanel::EntranceAllHad: return "dN / d(ln E) per primary";
+        case GridPanel::HeavyPerNucl:   return "dN / d(ln E/A) per primary";
+        case GridPanel::FragCounts:     return "entrances per primary";
+        case GridPanel::HadronVZ:       return "vertices per primary";
+        case GridPanel::DoseByFamily:   return "dose [Gy per 10^{6} prim]";
+    }
+    return "";
+}
+
+static void GridHistExtent(const TH1D* h, double& lo, double& hi) {
+    if (!h) return;
+    for (int b = 1; b <= h->GetNbinsX(); ++b) {
+        if (h->GetBinContent(b) <= 0.0) continue;
+        const double c = h->GetBinCenter(b);
+        if (c > 0.0) { lo = std::min(lo, c); hi = std::max(hi, c); }
+    }
+}
+
+// Positive-x extent of a log-x panel for one scenario (union across the group
+// fixes a common axis so the configs overlay cleanly).
+static void GridPanelExtent(const ScenarioData& d, GridPanel p, double& lo, double& hi) {
+    auto vec = [&](FamilyIdx f) {
+        for (double v : d.hitEdepByFam[static_cast<size_t>(f)])
+            if (v > 0.0) { lo = std::min(lo, v); hi = std::max(hi, v); }
+    };
+    switch (p) {
+        case GridPanel::EdepTotal: vec(FamilyIdx::Total); break;
+        case GridPanel::EdepHad:   vec(FamilyIdx::HadTotal); break;
+        case GridPanel::ICSD:      GridHistExtent(d.hIcsdTargetTot, lo, hi); break;
+        case GridPanel::EntranceAllHad:
+            for (const auto& sp : d.spectra) if (sp.key == "SpecIn_AllHad") GridHistExtent(sp.hist, lo, hi);
+            break;
+        case GridPanel::HeavyPerNucl: GridHistExtent(d.hHeavyPerNucl, lo, hi); break;
+        case GridPanel::HadronVZ:     GridHistExtent(d.hHadronVertexZ, lo, hi); break;
+        default: break;
+    }
+}
+
+// Normalised histogram for a log-x panel, built over the group-wide [lo,hi].
+static TH1D* GridPanelHist(const ScenarioData& d, GridPanel p, double lo, double hi,
+                           const std::string& name) {
+    const double w = (d.nEvents > 0) ? (1.0 / static_cast<double>(d.nEvents)) : 0.0;
+    const int nb = 110;
+    switch (p) {
+        case GridPanel::EdepTotal:
+            return BuildLogHistFromDoubles(d.hitEdepByFam[static_cast<size_t>(FamilyIdx::Total)], lo, hi, nb, w, name.c_str());
+        case GridPanel::EdepHad:
+            return BuildLogHistFromDoubles(d.hitEdepByFam[static_cast<size_t>(FamilyIdx::HadTotal)], lo, hi, nb, w, name.c_str());
+        case GridPanel::ICSD: {
+            if (!d.hIcsdTargetTot) return nullptr;
+            auto* h = static_cast<TH1D*>(d.hIcsdTargetTot->Clone(name.c_str()));
+            h->SetDirectory(nullptr);
+            const double norm = h->Integral();
+            if (norm > 0.0) h->Scale(1.0 / norm);
+            return h;
+        }
+        case GridPanel::EntranceAllHad: {
+            for (const auto& sp : d.spectra) {
+                if (sp.key != "SpecIn_AllHad" || !sp.hist) continue;
+                auto* h = static_cast<TH1D*>(sp.hist->Clone(name.c_str()));
+                h->SetDirectory(nullptr);
+                if (d.nEvents > 0) h->Scale(w);
+                return h;
+            }
+            return nullptr;
+        }
+        case GridPanel::HeavyPerNucl: {
+            if (!d.hHeavyPerNucl) return nullptr;
+            auto* h = static_cast<TH1D*>(d.hHeavyPerNucl->Clone(name.c_str()));
+            h->SetDirectory(nullptr);
+            if (d.nEvents > 0) h->Scale(w);
+            return h;
+        }
+        case GridPanel::HadronVZ: {
+            if (!d.hHadronVertexZ) return nullptr;
+            auto* h = static_cast<TH1D*>(d.hHadronVertexZ->Clone(name.c_str()));
+            h->SetDirectory(nullptr);
+            if (d.nEvents > 0) h->Scale(w);
+            return h;
+        }
+        default: return nullptr;
+    }
+}
+
+// Same style as plot.C elsewhere: PDF, legends outside the frame, DistinctColor.
+static void PlotAxisGrid(const std::vector<ScenarioData>& group, const AnalysisConfig& ac,
+                         const std::string& base, TDirectory* outDir) {
+    const int n = static_cast<int>(group.size());
+    if (n < 2) return;  // nothing to compare
+    if (outDir) outDir->cd();
+
+    // --- common log-x extents per panel ------------------------------------
+    const double kBig = std::numeric_limits<double>::max();
+    std::array<double, kGridPanels> xlo, xhi;
+    for (int p = 0; p < kGridPanels; ++p) { xlo[p] = kBig; xhi[p] = 0.0; }
+    for (const auto& d : group)
+        for (int p = 0; p < kGridPanels; ++p)
+            if (GridPanelLogX(static_cast<GridPanel>(p)))
+                GridPanelExtent(d, static_cast<GridPanel>(p), xlo[p], xhi[p]);
+
+    // Union of fragment elements for the FragEdep panel.
+    std::set<int> zset;
+    for (const auto& d : group)
+        for (const auto& kv : d.fragEdep) zset.insert(static_cast<int>(kv.first / 1000L));
+    std::vector<int> zs(zset.begin(), zset.end());
+
+    const bool hasMass = group.front().hasMass;
+    auto scaleOf = [&](const ScenarioData& d) {
+        return (d.nEvents > 0) ? (ac.normPrimaries / static_cast<double>(d.nEvents)) : 0.0;
+    };
+    auto cfgLabel = [](const ScenarioData& d) {
+        return d.cfg.had.empty() ? d.cfg.legendLabel : d.cfg.had;
+    };
+
+    auto* c = new TCanvas(Form("c_gridcfg_%s", base.c_str()),
+                          ("Hadronic config comparison: " + base).c_str(),
+                          ac.gridCanvasWidth, ac.gridCanvasHeight);
+    auto* gp = new TPad("gp", "", 0.0, 0.0, 0.845, 1.0);
+    gp->Divide(3, 3, 0.004, 0.006);
+    auto* lp = new TPad("lp", "", 0.845, 0.0, 1.0, 1.0);
+    lp->Draw(); gp->Draw();
+
+    std::vector<TObject*> owned;
+
+    // Placeholder for a panel with no data in the profile: keeps the 3x3 layout
+    // complete and labelled instead of leaving a blank pad.
+    auto drawEmpty = [&](TPad* pad, GridPanel pl, int p) {
+        auto* fr = new TH1D(Form("hGEmpty_%d_%s", p, base.c_str()), "", 10, 0, 1);
+        fr->SetStats(0);
+        fr->GetXaxis()->SetTitle(GridPanelXTitle(pl));
+        fr->GetYaxis()->SetTitle(GridPanelYTitle(pl));
+        fr->GetXaxis()->SetTitleSize(0.045); fr->GetXaxis()->CenterTitle(true);
+        fr->GetYaxis()->SetTitleSize(0.045); fr->GetYaxis()->CenterTitle(true);
+        fr->GetYaxis()->SetRangeUser(0.0, 1.0);
+        fr->Draw("AXIS");
+        owned.push_back(fr);
+        TLatex t; t.SetNDC(); t.SetTextFont(42); t.SetTextSize(0.050); t.SetTextAlign(12);
+        t.DrawLatex(0.16, 0.935, Form("#bf{%s}", GridPanelTitle(pl)));
+        TLatex n; n.SetNDC(); n.SetTextFont(42); n.SetTextSize(0.045); n.SetTextAlign(22);
+        n.DrawLatex(0.5, 0.45, "no data in profile");
+        pad->RedrawAxis();
+    };
+
+    for (int p = 0; p < kGridPanels; ++p) {
+        const GridPanel panel = static_cast<GridPanel>(p);
+        TPad* pad = static_cast<TPad*>(gp->cd(p + 1));
+        pad->SetLeftMargin(0.150); pad->SetRightMargin(0.045);
+        pad->SetTopMargin(0.170);  pad->SetBottomMargin(0.185);
+        if (GridPanelLogX(panel)) pad->SetLogx(1);
+        pad->SetLogy(1); pad->SetTickx(1); pad->SetTicky(1);
+        pad->Draw();
+
+        // ---- categorical panels (x = label index) --------------------------
+        if (panel == GridPanel::FragEdep || panel == GridPanel::FragCounts ||
+            panel == GridPanel::DoseByFamily) {
+            std::vector<std::string> labels;
+            std::vector<std::vector<double>> y(n);
+            if (panel == GridPanel::FragEdep) {
+                const int nz = static_cast<int>(zs.size());
+                for (int z : zs) labels.push_back(ElemSymbol(z));
+                for (int i = 0; i < n; ++i) {
+                    y[i].assign(nz, 0.0);
+                    const double s = scaleOf(group[i]);
+                    for (const auto& kv : group[i].fragEdep) {
+                        const int Z = static_cast<int>(kv.first / 1000L);
+                        auto it = std::find(zs.begin(), zs.end(), Z);
+                        if (it == zs.end()) continue;
+                        y[i][static_cast<size_t>(it - zs.begin())] +=
+                            (kv.second.first + kv.second.second) * s;
+                    }
+                }
+            } else if (panel == GridPanel::FragCounts) {
+                struct FC { const char* key; const char* lab; };
+                const std::vector<FC> fc = {
+                    {"SpecIn_Proton", "p"}, {"SpecIn_Alpha", "#alpha"}, {"SpecIn_Deuteron", "d"},
+                    {"SpecIn_Triton", "t"}, {"SpecIn_He3", "^{3}He"}, {"SpecIn_Heavy", "Heavy"},
+                    {"SpecIn_Neutron", "n"}
+                };
+                for (const auto& e : fc) labels.push_back(e.lab);
+                for (int i = 0; i < n; ++i) {
+                    y[i].assign(fc.size(), 0.0);
+                    const double s = scaleOf(group[i]);
+                    for (size_t k = 0; k < fc.size(); ++k)
+                        for (const auto& sp : group[i].spectra)
+                            if (sp.key == fc[k].key && sp.hist) { y[i][k] = sp.entries * s; break; }
+                }
+            } else {  // DoseByFamily
+                const std::vector<FamilyIdx> order = {
+                    FamilyIdx::Total, FamilyIdx::PrimaryEM, FamilyIdx::HadTotal,
+                    FamilyIdx::Alpha, FamilyIdx::Proton, FamilyIdx::Helium3,
+                    FamilyIdx::Deuteron, FamilyIdx::Triton, FamilyIdx::HeavyIon,
+                    FamilyIdx::Neutron, FamilyIdx::Other
+                };
+                const std::vector<std::string> lab = {
+                    "Total", "EM", "Had", "#alpha", "p", "^{3}He", "d", "t", "Heavy", "n", "Other"
+                };
+                labels = lab;
+                for (int i = 0; i < n; ++i) {
+                    y[i].assign(order.size(), 0.0);
+                    const auto& d = group[i];
+                    const double s = scaleOf(d);
+                    for (size_t k = 0; k < order.size(); ++k) {
+                        const double e = d.fam[static_cast<size_t>(order[k])].edepMeV;
+                        y[i][k] = hasMass ? EdepMeVToGy(e, d.targetMassKg) * s : e * s;
+                    }
+                }
+            }
+
+            const int nB = static_cast<int>(labels.size());
+            double ymax = 0.0;
+            for (const auto& v : y) for (double val : v) if (val > 0.0) ymax = std::max(ymax, val);
+            if (nB <= 0 || ymax <= 0.0) { drawEmpty(pad, panel, p); continue; }
+            const double y1 = std::pow(10.0, std::floor(std::log10(ymax)) - 3.0);
+            const double y2 = std::pow(10.0, std::ceil(std::log10(ymax)) + 0.4);
+
+            auto* frame = new TH1D(Form("hGF_%d_%s", p, base.c_str()), "", nB, 0, nB);
+            frame->SetStats(0);
+            frame->GetXaxis()->SetLabelSize(0.035);
+            frame->GetXaxis()->LabelsOption("v");
+            frame->GetYaxis()->SetRangeUser(y1, y2);
+            frame->GetXaxis()->SetTitle(GridPanelXTitle(panel));
+            frame->GetYaxis()->SetTitle(GridPanelYTitle(panel));
+            frame->GetXaxis()->SetTitleSize(0.045); frame->GetXaxis()->CenterTitle(true);
+            frame->GetYaxis()->SetTitleSize(0.045); frame->GetYaxis()->SetTitleOffset(1.05);
+            frame->GetYaxis()->CenterTitle(true);
+            for (int b = 0; b < nB; ++b) frame->GetXaxis()->SetBinLabel(b + 1, labels[b].c_str());
+            frame->Draw("AXIS");
+            owned.push_back(frame);
+
+            for (int i = 0; i < n; ++i) {
+                auto* g = new TGraph();
+                for (int b = 0; b < nB; ++b)
+                    if (y[i][b] > 0.0) g->AddPoint(b + 0.5, y[i][b]);
+                g->SetLineColor(DistinctColor(i));
+                g->SetMarkerColor(DistinctColor(i));
+                g->SetMarkerStyle(20 + i % 5);
+                g->SetLineWidth(2);
+                g->Draw("LP SAME");
+                owned.push_back(g);
+            }
+
+            TLatex t; t.SetNDC(); t.SetTextFont(42); t.SetTextSize(0.050); t.SetTextAlign(12);
+            t.DrawLatex(0.16, 0.935, Form("#bf{%s}", GridPanelTitle(panel)));
+            pad->RedrawAxis();
+            continue;
+        }
+
+        // ---- log-x spectrum panels -----------------------------------------
+        double lo = xlo[p], hi = xhi[p];
+        if (!(lo < hi)) { drawEmpty(pad, panel, p); continue; }
+        lo *= 0.8; hi *= 1.2;
+
+        std::vector<TGraph*> gs(n, nullptr);
+        double ymax = 0.0, ymin = kBig;
+        for (int i = 0; i < n; ++i) {
+            auto* h = GridPanelHist(group[i], panel, lo, hi,
+                                    Form("hGH_%d_%d_%s", p, i, base.c_str()));
+            if (!h) continue;
+            gs[i] = HistToCleanGraph(h, 0.0, panel != GridPanel::ICSD);
+            delete h;
+            for (int q = 0; q < gs[i]->GetN(); ++q) {
+                const double yy = gs[i]->GetY()[q];
+                if (yy > 0.0) { ymax = std::max(ymax, yy); ymin = std::min(ymin, yy); }
+            }
+        }
+        if (ymax <= 0.0) { for (auto* g : gs) delete g; drawEmpty(pad, panel, p); continue; }
+        const double y1 = std::pow(10.0, std::floor(std::log10(ymin)) - 0.3);
+        const double y2 = std::pow(10.0, std::ceil(std::log10(ymax)) + 0.5);
+
+        auto* frame = new TH1D(Form("hGF2_%d_%s", p, base.c_str()), "", 100, lo, hi);
+        frame->SetStats(0);
+        frame->GetXaxis()->SetTitle(GridPanelXTitle(panel));
+        frame->GetYaxis()->SetRangeUser(y1, y2);
+        frame->GetXaxis()->SetTitleSize(0.045); frame->GetXaxis()->SetTitleOffset(1.05);
+        frame->GetXaxis()->SetLabelSize(0.038); frame->GetXaxis()->CenterTitle(true);
+        frame->GetYaxis()->SetTitle(GridPanelYTitle(panel));
+        frame->GetYaxis()->SetTitleSize(0.045); frame->GetYaxis()->SetTitleOffset(1.05);
+        frame->GetYaxis()->SetLabelSize(0.038); frame->GetYaxis()->CenterTitle(true);
+        frame->Draw("AXIS");
+        owned.push_back(frame);
+
+        for (int i = 0; i < n; ++i) {
+            if (!gs[i]) continue;
+            gs[i]->SetLineColor(DistinctColor(i));
+            gs[i]->SetLineWidth(2);
+            gs[i]->Draw("L SAME");
+            owned.push_back(gs[i]);
+        }
+
+        TLatex t; t.SetNDC(); t.SetTextFont(42); t.SetTextSize(0.050); t.SetTextAlign(12);
+        t.DrawLatex(0.16, 0.935, Form("#bf{%s}", GridPanelTitle(panel)));
+        pad->RedrawAxis();
+    }
+
+    // ---- shared legend for the configs (right margin, outside the frames) --
+    {
+        lp->cd();
+        auto* leg = new TLegend(0.02, 0.05, 0.98, 0.95);
+        leg->SetBorderSize(0); leg->SetFillStyle(0);
+        leg->SetTextSize(0.030); leg->SetTextAlign(12);
+        for (int i = 0; i < n; ++i) {
+            auto* h = new TH1D(Form("hLegCfg_%d_%s", i, base.c_str()), "", 1, 0, 1);
+            h->SetFillColor(DistinctColor(i)); h->SetFillStyle(1001);
+            h->SetLineColor(DistinctColor(i)); h->SetLineWidth(2);
+            leg->AddEntry(h, cfgLabel(group[i]).c_str(), "lpf");
+            owned.push_back(h);
+        }
+        leg->Draw();
+    }
+
+    gp->cd();
+    c->Update();
+    std::cout << "  [Saved] " << SavePlot(c, ac, "Grid_Configs_" + base) << "\n";
+    delete c;
+    for (auto* o : owned) delete o;
+}
+
+// ============================================================================
 // 8. ТОЧКА ВХОДА
 // ============================================================================
 void analyzeLRB() {
@@ -2444,22 +2820,28 @@ void analyzeLRB() {
         fs::create_directories(fs::path(ac.outputRootFile).parent_path());
     }
 
-    std::vector<ScenarioData> loaded;
+    // Partition the scenario table:
+    //  * plain scenarios (empty 'had') feed the cross-scenario comparisons and
+    //    keep the historical behaviour unchanged;
+    //  * axis variants ('had' set) are grouped per base and each group is
+    //    loaded, plotted (suffixed per-config PDFs) and gridded on its own,
+    //    which bounds peak memory to one base at a time.
+    std::vector<ScenarioConfig> prodScen;
+    std::vector<std::string> groupOrder;
+    std::map<std::string, std::vector<ScenarioConfig>> axisGroups;
     for (const auto& sc : ac.scenarios) {
         // Validation micro-runs (test_*) are not part of the production figure
         // set; skip them so they do not add noise to the plots.
-        if (sc.tag.rfind("test_", 0) == 0) { std::cout << "\n>>> Skipping validation run: " << sc.tag << "\n"; continue; }
-        std::cout << "\n>>> Loading: " << sc.rootFile << " ...\n";
-        ScenarioData data;
-        if (LoadScenarioData(sc, data)) {
-            PrintAuditTable(data, ac);
-            loaded.push_back(std::move(data));
+        if (sc.tag.rfind("test_", 0) == 0) {
+            std::cout << "\n>>> Skipping validation run: " << sc.tag << "\n";
+            continue;
         }
-    }
-
-    if (loaded.empty()) {
-        std::cerr << "[FATAL] No scenarios could be loaded. Execution stopped." << std::endl;
-        return;
+        if (sc.had.empty()) {
+            prodScen.push_back(sc);
+        } else {
+            if (!axisGroups.count(sc.base)) groupOrder.push_back(sc.base);
+            axisGroups[sc.base].push_back(sc);
+        }
     }
 
     TFile* outRoot = TFile::Open(ac.outputRootFile.c_str(), "RECREATE");
@@ -2468,7 +2850,7 @@ void analyzeLRB() {
         return;
     }
 
-    for (const auto& d : loaded) {
+    auto plotOne = [&](const ScenarioData& d) {
         TDirectory* sub = outRoot->mkdir(d.cfg.tag.c_str());
         PlotSingleDoseBars(d, ac, sub);
         if (d.hasSubChannels) PlotSingleSubChannels(d, ac, sub);
@@ -2481,7 +2863,27 @@ void analyzeLRB() {
         PlotSingleSpectraAndKinematics(d, ac, sub);
         if (d.hasFragments) PlotSingleFragments(d, ac, sub);
         PlotSingleHadronVertexZ(d, ac, sub);
+    };
+
+    // --- plain production scenarios (historical figure set) ---
+    std::vector<ScenarioData> loaded;
+    for (const auto& sc : prodScen) {
+        std::cout << "\n>>> Loading: " << sc.rootFile << " ...\n";
+        ScenarioData data;
+        if (LoadScenarioData(sc, data)) {
+            PrintAuditTable(data, ac);
+            loaded.push_back(std::move(data));
+        }
     }
+
+    if (loaded.empty() && groupOrder.empty()) {
+        std::cerr << "[FATAL] No scenarios could be loaded. Execution stopped." << std::endl;
+        outRoot->Close();
+        delete outRoot;
+        return;
+    }
+
+    for (const auto& d : loaded) plotOne(d);
 
     if (loaded.size() >= 2) {
         TDirectory* cmpDir = outRoot->mkdir("Comparisons");
@@ -2491,6 +2893,23 @@ void analyzeLRB() {
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "SpecIn_Proton",     false, "Compare_SpecIn_Proton",     cmpDir);
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotSpectra, "SpecIn_Alpha",      false, "Compare_SpecIn_Alpha",      cmpDir);
         PlotCompareOverlayWithRatio(loaded, ac, ac.plotCompareHVZ, "HadronVertexZ", false, "Compare_HadronVertexZ", cmpDir);
+    }
+
+    // --- hadronic-axis groups: per-config suffixed plots + per-base grid ---
+    for (const auto& base : groupOrder) {
+        std::vector<ScenarioData> grp;
+        for (const auto& sc : axisGroups[base]) {
+            std::cout << "\n>>> Loading [axis " << sc.had << "]: " << sc.rootFile << " ...\n";
+            ScenarioData data;
+            if (LoadScenarioData(sc, data)) {
+                PrintAuditTable(data, ac);
+                grp.push_back(std::move(data));
+            }
+        }
+        if (grp.empty()) continue;
+        for (const auto& d : grp) plotOne(d);
+        TDirectory* gdir = outRoot->mkdir(("grid__" + base).c_str());
+        PlotAxisGrid(grp, ac, base, gdir);
     }
 
     outRoot->Write();

@@ -7,8 +7,10 @@
 # 4. Prints the per-scenario merge command.
 #
 # Usage:
-#   jobs/submit.sh                       # all scenarios from the manifest
+#   jobs/submit.sh                       # all base scenarios from the manifest
+#   jobs/submit.sh --axis                # only the hadronic-axis variant rows
 #   jobs/submit.sh monolayer_nofilt_cells_had test_dedx
+#   jobs/submit.sh monolayer_nofilt_cells_had__ftf_bic     # one axis variant
 #   jobs/submit.sh --dry-run             # print planned jobs, submit nothing
 #
 # Env:
@@ -24,6 +26,11 @@
 #   RAW_DIR          raw chunk output dir         (default output/raw)
 #   MERGED_DIR       merged output dir (plot.C reads output/root/<scenario>.root;
 #                    default output/root so the pipeline flows into plot.C)
+#
+# Manifest rows carry two extra columns (base, had): plain scenarios have an
+# empty 'had' (their own physics profile preset); axis variants have the preset
+# name (e.g. FTF_BIC) and tag <base>__<preset-lower>. By default only the plain
+# rows are submitted (backward compatible); use --axis for the variant rows.
 set -euo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,10 +55,12 @@ usage() {
 }
 
 DRY_RUN=0
+AXIS_ONLY=0
 selected=()
 for arg in "$@"; do
   case "$arg" in
     --dry-run)      DRY_RUN=1 ;;
+    --axis)         AXIS_ONLY=1 ;;
     -h|--help)      usage; exit 0 ;;
     -*)             echo "[submit] unknown option: $arg" >&2; exit 2 ;;
     *)              selected+=("$arg") ;;
@@ -80,16 +89,23 @@ fi
 
 # --- read scenarios from the manifest ---
 declare -a rows=()
-while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro memory disk; do
+while IFS=$'\t' read -r scenario geometry sample physics scoring events threads macro memory disk base had; do
   [[ -z "$scenario" || "$scenario" == "scenario" ]] && continue
   if [[ "${#selected[@]}" -gt 0 ]]; then
     keep=0
     for want in "${selected[@]}"; do
-      [[ "$want" == "$scenario" || "$want" == "$(basename "$macro" .mac)" ]] && keep=1
+      [[ "$want" == "$scenario" || "$want" == "$(basename "$macro" .mac)" || "$want" == "$base" ]] && keep=1
     done
     [[ "$keep" == "1" ]] || continue
+  else
+    # No explicit selection: bases by default, axis variants with --axis.
+    if [[ "$AXIS_ONLY" == "1" ]]; then
+      [[ -n "$had" ]] || continue
+    else
+      [[ -z "$had" ]] || continue
+    fi
   fi
-  rows+=("$scenario|$geometry|$sample|$physics|$scoring|$events|$threads|$macro|$memory|$disk")
+  rows+=("$scenario|$geometry|$sample|$physics|$scoring|$events|$threads|$macro|$memory|$disk|$base|$had")
 done < "$MANIFEST"
 
 if [[ "${#rows[@]}" -eq 0 ]]; then
@@ -99,11 +115,11 @@ fi
 
 mkdir -p "$RAW_DIR" logs "$ROOT/output/submit"
 
-echo "[submit] scheduler=${SCHEDULER}  scenarios=${#rows[@]}  events/job=$EVENTS_PER_JOB  ${EVENTS_TOTAL:+events/config(override)=$EVENTS_TOTAL}"
+echo "[submit] scheduler=${SCHEDULER}  scenarios=${#rows[@]}  axis-only=$([[ "$AXIS_ONLY" == "1" ]] && echo yes || echo no)  events/job=$EVENTS_PER_JOB  ${EVENTS_TOTAL:+events/config(override)=$EVENTS_TOTAL}"
 
 # --- submit ---
 for row in "${rows[@]}"; do
-  IFS='|' read -r scenario geometry sample physics scoring events threads macro memory disk <<< "$row"
+  IFS='|' read -r scenario geometry sample physics scoring events threads macro memory disk base had <<< "$row"
   mac="$ROOT/$macro"
   threads="${THREADS:-1}"   # cluster default: single-thread per task (override with THREADS=N)
   memory="${MEMORY:-${memory:-2000}}"   # MB (per-scenario from manifest; override with MEMORY)
